@@ -439,36 +439,110 @@ description: Browse project guidelines and conventions
 
 ## Architecture
 
+GuideGen follows a clean, layered architecture with dependency injection:
+
+```
+┌─────────────────────────────────────────┐
+│           CLI Entry Points              │
+│  (src/index.ts - commands & validation) │
+└──────────────┬──────────────────────────┘
+               │ Input Validation
+               │ (Zod schemas)
+┌──────────────▼──────────────────────────┐
+│          Workflow Layer                 │
+│  (Orchestrators - setup, guidelines)    │
+│  - High-level business logic            │
+│  - Phase coordination                   │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│           Phase Layer                   │
+│  (discovery, analysis, guidelines)      │
+│  - Independent, reusable phases         │
+│  - Single responsibility                │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│         Service Layer                   │
+│  (providers, validation, rate limiting) │
+│  - AI provider abstraction              │
+│  - Rate limiting with retry             │
+│  - Input validation                     │
+└──────────────┬──────────────────────────┘
+               │
+┌──────────────▼──────────────────────────┐
+│        Infrastructure Layer             │
+│  (filesystem, IO, utilities)            │
+│  - File system abstraction              │
+│  - Dependency injection container       │
+└─────────────────────────────────────────┘
+```
+
+### Architecture Principles
+
+1. **Dependency Injection** - Uses InversifyJS for loose coupling and testability
+2. **Interface-Based Design** - All dependencies injected via interfaces
+3. **Single Responsibility** - Each module has one clear purpose
+4. **Layer Separation** - Clear boundaries between layers
+5. **Type Safety** - Zero `any` types, strict TypeScript
+6. **Testability** - All components designed for easy testing
+
+### Directory Structure
+
 ```
 src/
-├── index.ts                   # CLI entry point
-├── types/                     # TypeScript interfaces
-├── providers/                 # AI provider abstraction
-│   ├── anthropic.ts
-│   └── groq.ts
+├── index.ts                   # CLI entry point with validation
 ├── core/
+│   ├── io/                   # File system abstraction
+│   │   └── filesystem.ts     # IFileSystem interface + implementations
 │   ├── phases/               # Independent phase implementations
-│   │   ├── discovery/
-│   │   ├── analysis/
-│   │   ├── guidelines/
-│   │   ├── indexes/
-│   │   └── claude-artifacts/
+│   │   ├── discovery/        # Tech stack detection
+│   │   ├── analysis/         # Pattern analysis
+│   │   ├── guidelines/       # Guideline generation
+│   │   ├── indexes/          # Index generation
+│   │   └── intelligent-merge/# AI-powered merging
 │   └── workflows/            # Workflow orchestration
-│       ├── setup.ts
+│       ├── setup.ts          # Full setup workflow
 │       ├── guidelines-update.ts
 │       ├── indexes-update.ts
-│       └── claude-update.ts
+│       └── claude-artifacts/ # Skills & agents generation
+├── providers/                # AI provider abstraction
+│   ├── types.ts              # IProviderClient interface
+│   ├── anthropic.ts          # Anthropic implementation
+│   ├── groq.ts               # Groq implementation
+│   └── manager.ts            # Provider manager with rate limiting
+├── services/                 # Business services
+│   └── rate-limiter.ts       # Rate limiting with exponential backoff
+├── validation/               # Input validation
+│   ├── schemas.ts            # Zod schemas
+│   └── input-validator.ts    # Path & input validation
+├── errors/                   # Custom error classes
+│   └── index.ts              # GuideGenError hierarchy
+├── di/                       # Dependency injection
+│   ├── container.ts          # InversifyJS container
+│   └── identifiers.ts        # DI tokens
+├── types/                    # TypeScript interfaces
 └── utils/                    # Utilities and helpers
 ```
+
+### Security Features
+
+1. **Input Validation** - All CLI inputs validated with Zod schemas
+2. **Path Traversal Prevention** - Strict path validation prevents directory escaping
+3. **Rate Limiting** - All API calls throttled with exponential backoff
+4. **Secrets Management** - Environment variables preferred over `.env` files
+5. **Custom Error Classes** - Structured error handling with context
 
 ### Key Design Principles
 
 1. **Modular Phases** - Each phase independent and testable
 2. **Intelligent Merging** - AI-powered update mode preserves edits
-3. **Validation** - Structure and cross-reference validation
+3. **Validation** - Input, structure, and cross-reference validation
 4. **Provider Abstraction** - Support multiple AI providers
-5. **Quality Over Quantity** - Adaptive limits
+5. **Quality Over Quantity** - Adaptive limits scale with complexity
 6. **Separation of Concerns** - Guidelines ≠ Skills ≠ Agents
+7. **Type Safety** - Zero `any` types, strict TypeScript
+8. **Security First** - Input validation, rate limiting, safe file operations
 
 ## Troubleshooting
 
@@ -516,12 +590,46 @@ npm run guidelines  # Will prompt for update mode
 
 ## Contributing
 
-The codebase is clean and modular:
+We welcome contributions! The codebase follows clean architecture principles with dependency injection.
 
-1. **New phase** - Add to `src/core/phases/`
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for:
+- Complete architecture documentation
+- Development workflow and guidelines
+- Code standards and best practices
+- Testing guidelines
+- Security best practices
+- Pull request process
+
+**Quick start:**
+
+```bash
+# Clone and install
+git clone https://github.com/lbouriez/GuideGen
+cd GuideGen
+npm install
+
+# Run tests
+npm test
+
+# Build
+npm run build
+
+# Run locally
+npm start -- setup /path/to/test/project
+```
+
+**Adding features:**
+
+1. **New phase** - Add to `src/core/phases/` with tests
 2. **New workflow** - Add to `src/core/workflows/`
 3. **New provider** - Implement `IProviderClient` interface
-4. **Update types** - Add to `src/types/`
+4. **New service** - Use `@injectable()` decorator and add to DI container
+
+All code must:
+- ✅ Have zero `any` types
+- ✅ Include unit tests
+- ✅ Follow existing patterns
+- ✅ Include JSDoc for public APIs
 
 ## License
 
