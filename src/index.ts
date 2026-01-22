@@ -28,6 +28,8 @@ import {
   printDivider,
 } from './utils/display';
 import { ProviderManager } from './providers/manager';
+import { container } from './di/container';
+import { TYPES } from './di/identifiers';
 import { generateAnalysisReport } from './core/phases/analysis-report';
 import { getErrorMessage } from './core/utils/errors';
 import { TargetPathSchema, AnalysisDepthSchema } from './validation/schemas';
@@ -211,7 +213,7 @@ async function runSetup(
   try {
     // Initialize provider
     printInfo('Initializing AI provider...');
-    const providerManager = ProviderManager.getInstance();
+    const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
 
     if (forceSetup) {
       await providerManager.forceSetup();
@@ -260,7 +262,7 @@ async function runAnalyze(
 
   try {
     // Initialize provider
-    const providerManager = ProviderManager.getInstance();
+    const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
     if (forceSetup) {
       await providerManager.forceSetup();
     }

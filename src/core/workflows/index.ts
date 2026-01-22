@@ -19,6 +19,8 @@ export { runSuggestPhase } from '../phases/suggest';
 import { resolve } from 'path';
 import type { AnalysisDepth } from '../../types';
 import { ProviderManager } from '../../providers/manager';
+import { container } from '../../di/container';
+import { TYPES } from '../../di/identifiers';
 import { runGuidelinesWorkflow } from './guidelines-update';
 import { runIndexesWorkflow } from './indexes-update';
 import { runClaudeArtifactsWorkflow } from './claude-update';
@@ -40,7 +42,7 @@ export async function runGuidelinesGeneration(
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = ProviderManager.getInstance();
+  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   if (forceSetup) {
     await providerManager.forceSetup();
   }
@@ -91,7 +93,7 @@ export async function runIndexGeneration(
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = ProviderManager.getInstance();
+  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   if (forceSetup) {
     await providerManager.forceSetup();
   }
@@ -140,7 +142,7 @@ export async function runClaudeGeneration(
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = ProviderManager.getInstance();
+  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   if (forceSetup) {
     await providerManager.forceSetup();
   }

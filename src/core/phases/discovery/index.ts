@@ -5,7 +5,9 @@
 
 import { join } from 'path';
 import type { TechProfile, PhaseResult, AnalysisDepth } from '@/types';
-import { createProviderClient } from '@/providers/manager';
+import { createProviderClient, ProviderManager } from '@/providers/manager';
+import { container } from '@/di/container';
+import { TYPES } from '@/di/identifiers';
 import { readFileSafe } from '../../utils/file-io';
 import { getFolderStructure, createFolderTree } from '../../utils/structure';
 import { analyzeTechStack } from './analyzer';
@@ -52,8 +54,7 @@ export async function runDiscoveryPhase(
     const folderTree = createFolderTree(structure.directories);
 
     // Get provider name for display
-    const { ProviderManager } = await import('../../../providers/manager');
-    const providerManager = ProviderManager.getInstance();
+    const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
     const currentProvider = providerManager.getCurrentProvider();
     const providerName = currentProvider === 'anthropic' ? 'Claude' :
                         currentProvider === 'groq' ? 'Groq' : 'AI';

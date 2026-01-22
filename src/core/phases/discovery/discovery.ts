@@ -6,7 +6,9 @@
 import { join } from 'path';
 import inquirer from 'inquirer';
 import type { TechProfile, PhaseResult, AnalysisDepth, FolderStructure } from '@/types';
-import { createProviderClient } from '@/providers/manager';
+import { createProviderClient, ProviderManager } from '@/providers/manager';
+import { container } from '@/di/container';
+import { TYPES } from '@/di/identifiers';
 import {
   getFolderStructure,
   readFileSafe,
@@ -43,9 +45,8 @@ async function readConfigFiles(
 /**
  * Get the display name for the current AI provider
  */
-async function getProviderDisplayName(): Promise<string> {
-  const { ProviderManager } = await import('@/providers/manager');
-  const providerManager = ProviderManager.getInstance();
+function getProviderDisplayName(): string {
+  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   const currentProvider = providerManager.getCurrentProvider();
   return currentProvider === 'anthropic' ? 'Claude' :
          currentProvider === 'groq' ? 'Groq' : 'AI';
@@ -94,8 +95,7 @@ async function handleProjectExclusions(techProfile: TechProfile): Promise<void> 
     printInfo(`  - ${p.name} (${p.type}) at ${p.path}`);
   });
 
-  const { ProviderManager } = await import('@/providers/manager');
-  const providerManager = ProviderManager.getInstance();
+  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   const exclusionsConfigured = providerManager.hasConfiguredExclusions();
 
   if (!exclusionsConfigured) {
@@ -164,7 +164,7 @@ export async function runDiscoveryPhase(
     const folderTree = createFolderTree(structure.directories);
 
     // Get provider name for display
-    const providerName = await getProviderDisplayName();
+    const providerName = getProviderDisplayName();
     spinner.text = `Analyzing tech stack with ${providerName}...`;
 
     // Use AI provider to analyze

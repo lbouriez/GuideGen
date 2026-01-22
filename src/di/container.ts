@@ -10,6 +10,9 @@ import { TYPES } from './identifiers.js';
 import { RateLimiter } from '../services/rate-limiter.js';
 import { InputValidator } from '../validation/input-validator.js';
 
+// Provider Services
+import { ProviderManager } from '../providers/manager.js';
+
 // File System (from existing code)
 import { RealFileSystem } from '../core/io/filesystem.js';
 
@@ -50,6 +53,9 @@ export function createContainer(): Container {
 
   // Logger (constant value - already exists)
   container.bind<ILogger>(TYPES.ILogger).toConstantValue(logger);
+
+  // Provider Manager
+  container.bind<ProviderManager>(TYPES.IProviderManager).to(ProviderManager).inSingletonScope();
 
   // Claude Artifacts Services
   container.bind<ArtifactFileManager>(TYPES.IArtifactFileManager).to(ArtifactFileManager).inSingletonScope();
