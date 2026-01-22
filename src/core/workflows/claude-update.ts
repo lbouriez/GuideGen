@@ -51,6 +51,23 @@ function deleteClaudeArtifacts(targetPath: string): void {
 }
 
 /**
+ * Read markdown files from a directory into a Map
+ */
+function readMarkdownFiles(dirPath: string): Map<string, string> {
+  const files = new Map<string, string>();
+
+  if (fs.existsSync(dirPath)) {
+    const fileNames = fs.readdirSync(dirPath).filter(f => f.endsWith('.md'));
+    for (const fileName of fileNames) {
+      const content = fs.readFileSync(path.join(dirPath, fileName), 'utf-8');
+      files.set(fileName, content);
+    }
+  }
+
+  return files;
+}
+
+/**
  * Read existing claude artifacts from disk
  */
 function readExistingArtifacts(targetPath: string): {
@@ -58,37 +75,17 @@ function readExistingArtifacts(targetPath: string): {
   agents: Map<string, string>;
   claudeMd: string | null;
 } {
-  const skills = new Map<string, string>();
-  const agents = new Map<string, string>();
-  let claudeMd: string | null = null;
-
-  // Read skills
   const skillsPath = path.join(targetPath, '.claude', 'skills');
-  if (fs.existsSync(skillsPath)) {
-    const files = fs.readdirSync(skillsPath).filter(f => f.endsWith('.md'));
-    for (const file of files) {
-      const content = fs.readFileSync(path.join(skillsPath, file), 'utf-8');
-      skills.set(file, content);
-    }
-  }
-
-  // Read agents
   const agentsPath = path.join(targetPath, '.claude', 'agents');
-  if (fs.existsSync(agentsPath)) {
-    const files = fs.readdirSync(agentsPath).filter(f => f.endsWith('.md'));
-    for (const file of files) {
-      const content = fs.readFileSync(path.join(agentsPath, file), 'utf-8');
-      agents.set(file, content);
-    }
-  }
-
-  // Read CLAUDE.md
   const claudeMdPath = path.join(targetPath, 'CLAUDE.md');
-  if (fs.existsSync(claudeMdPath)) {
-    claudeMd = fs.readFileSync(claudeMdPath, 'utf-8');
-  }
 
-  return { skills, agents, claudeMd };
+  return {
+    skills: readMarkdownFiles(skillsPath),
+    agents: readMarkdownFiles(agentsPath),
+    claudeMd: fs.existsSync(claudeMdPath)
+      ? fs.readFileSync(claudeMdPath, 'utf-8')
+      : null,
+  };
 }
 
 /**
