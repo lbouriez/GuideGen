@@ -1,36 +1,155 @@
 /**
  * File System Abstraction Layer
- * Provides a testable interface for file operations
+ *
+ * This module provides a testable interface for file operations, enabling
+ * dependency injection and easy mocking in tests. It supports both async
+ * and sync operations for maximum flexibility.
+ *
+ * @module core/io/filesystem
+ *
+ * @example
+ * ```typescript
+ * // Using the real file system
+ * const fs = new RealFileSystem();
+ * const content = await fs.readFile('/path/to/file', 'utf-8');
+ *
+ * // Using the mock file system in tests
+ * const mockFs = new MockFileSystem({ '/test/file.txt': 'content' });
+ * const content = await mockFs.readFile('/test/file.txt', 'utf-8');
+ * ```
  */
 
 import { injectable } from 'inversify';
 import type { Dirent, Stats } from 'fs';
 
 /**
- * File system interface for abstraction
+ * Interface for file system operations
+ *
+ * This interface abstracts file system operations to enable:
+ * - Unit testing with mock implementations
+ * - Dependency injection
+ * - Platform-agnostic file operations
+ *
+ * Implementations:
+ * - {@link RealFileSystem} - Uses Node.js fs module
+ * - {@link MockFileSystem} - In-memory implementation for testing
  */
 export interface IFileSystem {
-  // File operations
+  // Async file operations
+
+  /**
+   * Read file contents asynchronously
+   * @param path - Path to the file
+   * @param encoding - Character encoding
+   * @returns File contents as string
+   * @throws Error if file doesn't exist or can't be read
+   */
   readFile(path: string, encoding: BufferEncoding): Promise<string>;
+
+  /**
+   * Write content to a file asynchronously
+   * @param path - Path to the file
+   * @param content - Content to write
+   * @param encoding - Character encoding
+   */
   writeFile(path: string, content: string, encoding: BufferEncoding): Promise<void>;
+
+  /**
+   * Check if a file or directory exists
+   * @param path - Path to check
+   * @returns true if path exists
+   */
   exists(path: string): Promise<boolean>;
+
+  /**
+   * Get file/directory statistics
+   * @param path - Path to stat
+   * @returns Stats object with file information
+   * @throws Error if path doesn't exist
+   */
   stat(path: string): Promise<Stats>;
 
-  // Directory operations
+  // Async directory operations
+
+  /**
+   * Read directory contents
+   * @param path - Path to directory
+   * @returns Array of file/directory names
+   */
   readdir(path: string): Promise<string[]>;
+
+  /**
+   * Read directory contents with file type information
+   * @param path - Path to directory
+   * @returns Array of Dirent objects with isFile/isDirectory methods
+   */
   readdirWithFileTypes(path: string): Promise<Dirent[]>;
+
+  /**
+   * Create a directory
+   * @param path - Path for new directory
+   * @param options - Options including recursive flag
+   */
   mkdir(path: string, options?: { recursive?: boolean }): Promise<void>;
 
-  // Synchronous operations (for backwards compatibility)
+  // Sync operations (for backwards compatibility)
+
+  /**
+   * Read file contents synchronously
+   * @param path - Path to the file
+   * @param encoding - Character encoding
+   * @returns File contents as string
+   */
   readFileSync(path: string, encoding: BufferEncoding): string;
+
+  /**
+   * Write content to a file synchronously
+   * @param path - Path to the file
+   * @param content - Content to write
+   * @param encoding - Character encoding
+   */
   writeFileSync(path: string, content: string, encoding: BufferEncoding): void;
+
+  /**
+   * Check if a file or directory exists (sync)
+   * @param path - Path to check
+   * @returns true if path exists
+   */
   existsSync(path: string): boolean;
+
+  /**
+   * Read directory contents synchronously
+   * @param path - Path to directory
+   * @returns Array of file/directory names
+   */
   readdirSync(path: string): string[];
+
+  /**
+   * Read directory contents with file type information (sync)
+   * @param path - Path to directory
+   * @returns Array of Dirent objects
+   */
   readdirSyncWithFileTypes(path: string): Dirent[];
 }
 
 /**
  * Real file system implementation using Node.js fs module
+ *
+ * This is the production implementation of {@link IFileSystem} that
+ * performs actual file system operations using Node.js fs module.
+ *
+ * @example
+ * ```typescript
+ * const fs = new RealFileSystem();
+ *
+ * // Read a file
+ * const content = await fs.readFile('./package.json', 'utf-8');
+ *
+ * // Check if directory exists
+ * if (await fs.exists('./src')) {
+ *   const files = await fs.readdir('./src');
+ * }
+ * ```
  */
 @injectable()
 export class RealFileSystem implements IFileSystem {
@@ -93,6 +212,25 @@ export class RealFileSystem implements IFileSystem {
 
 /**
  * Mock file system for testing
+ *
+ * In-memory implementation of {@link IFileSystem} that stores files
+ * and directories in Maps/Sets. Useful for unit testing without
+ * touching the real file system.
+ *
+ * @example
+ * ```typescript
+ * // Initialize with files
+ * const fs = new MockFileSystem({
+ *   '/project/package.json': '{"name": "test"}',
+ *   '/project/src/index.ts': 'export {}',
+ * });
+ *
+ * // Add directories
+ * fs.addDirectory('/project/src');
+ *
+ * // Use like real file system
+ * const content = await fs.readFile('/project/package.json', 'utf-8');
+ * ```
  */
 @injectable()
 export class MockFileSystem implements IFileSystem {
@@ -290,20 +428,55 @@ export class MockFileSystem implements IFileSystem {
   }
 }
 
+// ============================================================================
+// Global File System Instance
+// ============================================================================
+
 /**
  * Global file system instance
- * Can be swapped for testing
+ *
+ * This singleton can be swapped for testing. Use {@link setFileSystem} to
+ * inject a mock implementation and {@link resetFileSystem} to restore
+ * the real implementation.
  */
 let globalFileSystem: IFileSystem = new RealFileSystem();
 
+/**
+ * Get the current global file system instance
+ * @returns The current IFileSystem implementation
+ */
 export function getFileSystem(): IFileSystem {
   return globalFileSystem;
 }
 
+/**
+ * Set a custom file system implementation
+ *
+ * Useful for testing to inject a mock file system.
+ *
+ * @param fs - The file system implementation to use
+ *
+ * @example
+ * ```typescript
+ * // In tests
+ * const mockFs = new MockFileSystem({ ... });
+ * setFileSystem(mockFs);
+ *
+ * // Run tests...
+ *
+ * // Cleanup
+ * resetFileSystem();
+ * ```
+ */
 export function setFileSystem(fs: IFileSystem): void {
   globalFileSystem = fs;
 }
 
+/**
+ * Reset to the default RealFileSystem implementation
+ *
+ * Should be called in test cleanup to restore normal operation.
+ */
 export function resetFileSystem(): void {
   globalFileSystem = new RealFileSystem();
 }
