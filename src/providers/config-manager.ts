@@ -4,16 +4,91 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import type { ProviderConfig } from './types';
 import { ProviderType, DEFAULT_MODELS } from './types';
 import { logger } from '@/utils/logger';
+import { printWarning } from '@/utils/display';
 
 export class ProviderConfigManager {
   private readonly envPath: string;
+  private readonly projectRoot: string;
 
   constructor(envPath?: string) {
     this.envPath = envPath || join(process.cwd(), '.env');
+    this.projectRoot = dirname(this.envPath);
+  }
+
+  /**
+   * Check if .env is listed in .gitignore
+   */
+  isEnvInGitignore(): boolean {
+    const gitignorePath = join(this.projectRoot, '.gitignore');
+
+    if (!existsSync(gitignorePath)) {
+      return false;
+    }
+
+    try {
+      const content = readFileSync(gitignorePath, 'utf-8');
+      const lines = content.split('\n').map(l => l.trim());
+
+      // Check for various .env patterns
+      const envPatterns = ['.env', '.env*', '.env.local', '*.env'];
+      return lines.some(line => {
+        if (line.startsWith('#')) return false;
+        return envPatterns.some(pattern => {
+          if (pattern.includes('*')) {
+            const regex = new RegExp('^' + pattern.replace('*', '.*') + '$');
+            return regex.test('.env');
+          }
+          return line === pattern;
+        });
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Warn user if .env is not in .gitignore
+   */
+  private warnIfEnvNotIgnored(): void {
+    if (!this.isEnvInGitignore()) {
+      printWarning(
+        '\n⚠️  Security Warning: Your .env file is not in .gitignore!\n' +
+        '   API keys may be accidentally committed to version control.\n' +
+        '   Add ".env" to your .gitignore file to prevent this.\n'
+      );
+    }
+  }
+
+  /**
+   * Load configuration from environment variables (preferred, more secure)
+   */
+  loadFromEnvironment(): ProviderConfig | null {
+    const provider = process.env.AI_PROVIDER as ProviderType | undefined;
+    const apiKey = provider === ProviderType.ANTHROPIC
+      ? process.env.ANTHROPIC_API_KEY
+      : process.env.GROQ_API_KEY;
+
+    if (!provider || !apiKey) {
+      return null;
+    }
+
+    const defaultModels = DEFAULT_MODELS[provider];
+    return {
+      provider,
+      apiKey,
+      models: {
+        quick: process.env.AI_MODEL_QUICK || defaultModels.quick,
+        standard: process.env.AI_MODEL_STANDARD || defaultModels.standard,
+        thorough: process.env.AI_MODEL_THOROUGH || defaultModels.thorough,
+      },
+      excludedProjects: process.env.EXCLUDED_PROJECTS
+        ? process.env.EXCLUDED_PROJECTS.split(',').map(p => p.trim())
+        : [],
+    };
   }
 
   /**
@@ -93,11 +168,16 @@ export class ProviderConfigManager {
 
   /**
    * Save configuration to .env file
+   * Warns if .env is not in .gitignore to prevent accidental commits
    */
   saveToEnv(config: ProviderConfig): void {
+    // Check security before saving
+    this.warnIfEnvNotIgnored();
+
     const apiKeyVar = config.provider === ProviderType.ANTHROPIC ? 'ANTHROPIC_API_KEY' : 'GROQ_API_KEY';
 
     const envContent = `# GuideGen AI Provider Configuration
+# WARNING: This file contains sensitive API keys. Ensure it's in .gitignore!
 AI_PROVIDER=${config.provider}
 ${apiKeyVar}=${config.apiKey}
 

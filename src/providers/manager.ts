@@ -55,13 +55,21 @@ export class ProviderManager {
 
   /**
    * Load or setup provider configuration
+   * Priority: 1) Environment variables, 2) .env file, 3) Interactive setup
    */
   async loadOrSetupConfig(forceSetup: boolean = false): Promise<ProviderConfig> {
     if (this.config && !forceSetup) {
       return this.config;
     }
 
-    // Try to load from .env
+    // Try to load from environment variables first (more secure)
+    const envVarsConfig = this.configManager.loadFromEnvironment();
+    if (envVarsConfig && !forceSetup) {
+      this.config = envVarsConfig;
+      return envVarsConfig;
+    }
+
+    // Try to load from .env file
     const envConfig = this.configManager.loadFromEnv();
 
     if (envConfig && !forceSetup) {
