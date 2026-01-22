@@ -92,6 +92,54 @@ export class ProviderConfigManager {
   }
 
   /**
+   * Parse .env file content into key-value map
+   */
+  private parseEnvFile(content: string): Map<string, string> {
+    const envMap = new Map<string, string>();
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      // Skip empty lines and comments
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      const [key, ...valueParts] = trimmed.split('=');
+      const value = valueParts.join('=').trim();
+      envMap.set(key.trim(), value);
+    }
+
+    return envMap;
+  }
+
+  /**
+   * Build ProviderConfig from parsed environment variables
+   */
+  private buildConfigFromEnvMap(envMap: Map<string, string>): ProviderConfig | null {
+    const provider = envMap.get('AI_PROVIDER') as ProviderType | undefined;
+    const apiKey = envMap.get('ANTHROPIC_API_KEY') || envMap.get('GROQ_API_KEY') || '';
+
+    if (!provider || !apiKey) {
+      return null;
+    }
+
+    const defaultModels = DEFAULT_MODELS[provider];
+    const excludedProjectsStr = envMap.get('EXCLUDED_PROJECTS') || '';
+
+    return {
+      provider,
+      apiKey,
+      models: {
+        quick: envMap.get('AI_MODEL_QUICK') || defaultModels.quick,
+        standard: envMap.get('AI_MODEL_STANDARD') || defaultModels.standard,
+        thorough: envMap.get('AI_MODEL_THOROUGH') || defaultModels.thorough,
+      },
+      excludedProjects: excludedProjectsStr
+        ? excludedProjectsStr.split(',').map(p => p.trim())
+        : [],
+    };
+  }
+
+  /**
    * Load configuration from .env file
    */
   loadFromEnv(): ProviderConfig | null {
@@ -101,65 +149,8 @@ export class ProviderConfigManager {
 
     try {
       const envContent = readFileSync(this.envPath, 'utf-8');
-      const lines = envContent.split('\n');
-
-      let provider: ProviderType | null = null;
-      let apiKey = '';
-      const models = {
-        quick: '',
-        standard: '',
-        thorough: '',
-      };
-      let excludedProjects: string[] = [];
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith('#')) continue;
-
-        const [key, ...valueParts] = trimmed.split('=');
-        const value = valueParts.join('=').trim();
-
-        switch (key.trim()) {
-          case 'AI_PROVIDER':
-            provider = value as ProviderType;
-            break;
-          case 'ANTHROPIC_API_KEY':
-            if (!apiKey) apiKey = value;
-            break;
-          case 'GROQ_API_KEY':
-            if (!apiKey) apiKey = value;
-            break;
-          case 'AI_MODEL_QUICK':
-            models.quick = value;
-            break;
-          case 'AI_MODEL_STANDARD':
-            models.standard = value;
-            break;
-          case 'AI_MODEL_THOROUGH':
-            models.thorough = value;
-            break;
-          case 'EXCLUDED_PROJECTS':
-            excludedProjects = value ? value.split(',').map(p => p.trim()) : [];
-            break;
-        }
-      }
-
-      if (!provider || !apiKey) {
-        return null;
-      }
-
-      // Use defaults if models not specified
-      const defaultModels = DEFAULT_MODELS[provider];
-      return {
-        provider,
-        apiKey,
-        models: {
-          quick: models.quick || defaultModels.quick,
-          standard: models.standard || defaultModels.standard,
-          thorough: models.thorough || defaultModels.thorough,
-        },
-        excludedProjects,
-      };
+      const envMap = this.parseEnvFile(envContent);
+      return this.buildConfigFromEnvMap(envMap);
     } catch (error) {
       logger.error('Failed to parse .env file', error);
       return null;

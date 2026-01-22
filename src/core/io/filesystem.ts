@@ -293,32 +293,38 @@ export class MockFileSystem implements IFileSystem {
     } as Stats;
   }
 
+  /**
+   * Extract direct children from a path within the given prefix
+   */
+  private extractDirectChildren(fullPath: string, prefix: string, excludePath?: string): string | null {
+    if (!fullPath.startsWith(prefix)) return null;
+    if (excludePath && fullPath === excludePath) return null;
+
+    const relative = fullPath.substring(prefix.length);
+    const slashIndex = relative.indexOf('/');
+
+    // Only direct children (no nested paths)
+    return slashIndex === -1 ? relative : null;
+  }
+
   async readdir(path: string): Promise<string[]> {
     if (!this.directories.has(path)) {
       throw new Error(`ENOENT: no such file or directory, scandir '${path}'`);
     }
-    const results: string[] = [];
-    const prefix = path.endsWith('/') ? path : `${path}/`;
 
-    // Find direct children
+    const prefix = path.endsWith('/') ? path : `${path}/`;
+    const results: string[] = [];
+
+    // Find direct children from files
     this.files.forEach((_content, filePath) => {
-      if (filePath.startsWith(prefix)) {
-        const relative = filePath.substring(prefix.length);
-        const slashIndex = relative.indexOf('/');
-        if (slashIndex === -1) {
-          results.push(relative);
-        }
-      }
+      const child = this.extractDirectChildren(filePath, prefix);
+      if (child) results.push(child);
     });
 
+    // Find direct children from directories
     this.directories.forEach(dirPath => {
-      if (dirPath.startsWith(prefix) && dirPath !== path) {
-        const relative = dirPath.substring(prefix.length);
-        const slashIndex = relative.indexOf('/');
-        if (slashIndex === -1) {
-          results.push(relative);
-        }
-      }
+      const child = this.extractDirectChildren(dirPath, prefix, path);
+      if (child) results.push(child);
     });
 
     return [...new Set(results)];
@@ -375,17 +381,14 @@ export class MockFileSystem implements IFileSystem {
     if (!this.directories.has(path)) {
       throw new Error(`ENOENT: no such file or directory, scandir '${path}'`);
     }
-    const results: string[] = [];
-    const prefix = path.endsWith('/') ? path : `${path}/`;
 
+    const prefix = path.endsWith('/') ? path : `${path}/`;
+    const results: string[] = [];
+
+    // Find direct children from files
     this.files.forEach((_content, filePath) => {
-      if (filePath.startsWith(prefix)) {
-        const relative = filePath.substring(prefix.length);
-        const slashIndex = relative.indexOf('/');
-        if (slashIndex === -1) {
-          results.push(relative);
-        }
-      }
+      const child = this.extractDirectChildren(filePath, prefix);
+      if (child) results.push(child);
     });
 
     return results;
