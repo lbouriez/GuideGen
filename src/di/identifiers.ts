@@ -30,6 +30,14 @@ export const TYPES = {
   IIndexesWorkflow: Symbol.for('IIndexesWorkflow'),
   IClaudeWorkflow: Symbol.for('IClaudeWorkflow'),
 
+  // Claude Artifacts Services
+  IArtifactFileManager: Symbol.for('IArtifactFileManager'),
+  ISkillGeneratorService: Symbol.for('ISkillGeneratorService'),
+  IAgentGeneratorService: Symbol.for('IAgentGeneratorService'),
+  IClaudeMdGeneratorService: Symbol.for('IClaudeMdGeneratorService'),
+  IArtifactMergerService: Symbol.for('IArtifactMergerService'),
+  IGuidelineExtractor: Symbol.for('IGuidelineExtractor'),
+
   // Utils
   ILogger: Symbol.for('ILogger'),
   IInputValidator: Symbol.for('IInputValidator'),

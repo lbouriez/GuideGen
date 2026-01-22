@@ -8,13 +8,22 @@ import { TYPES } from './identifiers.js';
 
 // Services
 import { RateLimiter } from '../services/rate-limiter.js';
-import { InputValidator, PathValidator } from '../validation/input-validator.js';
+import { InputValidator } from '../validation/input-validator.js';
 
 // File System (from existing code)
 import { RealFileSystem } from '../core/io/filesystem.js';
 
 // Logger (from existing code)
 import { logger } from '../utils/logger.js';
+
+// Claude Artifacts Services
+import { ArtifactFileManager } from '../workflows/claude-artifacts/services/ArtifactFileManager.js';
+import { SkillGeneratorService } from '../workflows/claude-artifacts/services/SkillGeneratorService.js';
+import { AgentGeneratorService } from '../workflows/claude-artifacts/services/AgentGeneratorService.js';
+import { ClaudeMdGeneratorService } from '../workflows/claude-artifacts/services/ClaudeMdGeneratorService.js';
+import { ArtifactMergerService } from '../workflows/claude-artifacts/services/ArtifactMergerService.js';
+import { GuidelineExtractor } from '../workflows/claude-artifacts/services/GuidelineExtractor.js';
+import { ClaudeArtifactsWorkflow } from '../workflows/claude-artifacts/ClaudeArtifactsWorkflow.js';
 
 // Interfaces
 import type { IFileSystem } from '../interfaces/services/IFileService.js';
@@ -41,6 +50,15 @@ export function createContainer(): Container {
 
   // Logger (constant value - already exists)
   container.bind<ILogger>(TYPES.ILogger).toConstantValue(logger);
+
+  // Claude Artifacts Services
+  container.bind<ArtifactFileManager>(TYPES.IArtifactFileManager).to(ArtifactFileManager).inSingletonScope();
+  container.bind<SkillGeneratorService>(TYPES.ISkillGeneratorService).to(SkillGeneratorService).inSingletonScope();
+  container.bind<AgentGeneratorService>(TYPES.IAgentGeneratorService).to(AgentGeneratorService).inSingletonScope();
+  container.bind<ClaudeMdGeneratorService>(TYPES.IClaudeMdGeneratorService).to(ClaudeMdGeneratorService).inSingletonScope();
+  container.bind<ArtifactMergerService>(TYPES.IArtifactMergerService).to(ArtifactMergerService).inSingletonScope();
+  container.bind<GuidelineExtractor>(TYPES.IGuidelineExtractor).to(GuidelineExtractor).inSingletonScope();
+  container.bind<ClaudeArtifactsWorkflow>(TYPES.IClaudeWorkflow).to(ClaudeArtifactsWorkflow).inSingletonScope();
 
   return container;
 }
