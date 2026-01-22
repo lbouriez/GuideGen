@@ -1,0 +1,82 @@
+{
+  "name": "guidegen",
+  "version": "0.1.0",
+  "description": "AI-powered guideline generator - analyzes your codebase and generates intelligent documentation, Claude Code skills, and enforcement agents",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "guidegen": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:exe": "pkg . --out-path ./dist --targets node18-win-x64",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "setup": "tsx src/index.ts setup",
+    "analyze": "tsx src/index.ts analyze",
+    "guidelines": "tsx src/index.ts guidelines",
+    "indexes": "tsx src/index.ts indexes",
+    "claude": "tsx src/index.ts claude",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai",
+    "developer-tools",
+    "code-guidelines",
+    "documentation",
+    "guidegen",
+    "guidelines-generator"
+  ],
+  "author": "Laurent Bouriez <lbouriez@users.noreply.github.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lbouriez/GuideGen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/lbouriez/GuideGen/issues"
+  },
+  "homepage": "https://github.com/lbouriez/GuideGen#readme",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "glob": "^11.0.0",
+    "groq-sdk": "^0.37.0",
+    "inquirer": "^9.3.0",
+    "ora": "^8.0.1",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0",
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^22.0.0",
+    "@vitest/ui": "^4.0.17",
+    "jsdom": "^27.4.0",
+    "memfs": "^4.56.4",
+    "pkg": "^5.8.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.17"
+  },
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "assets": [
+      "README.md",
+      "CLAUDE.md"
+    ],
+    "outputPath": "dist",
+    "options": [
+      "--experimental-modules"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
