@@ -429,54 +429,10 @@ export class MockFileSystem implements IFileSystem {
 }
 
 // ============================================================================
-// Global File System Instance
+// NOTE: Global singleton pattern removed in favor of dependency injection.
+// Use the DI container to get IFileSystem instances:
+//
+// import { container } from '@/di/container';
+// import { TYPES } from '@/di/identifiers';
+// const fs = container.get<IFileSystem>(TYPES.IFileSystem);
 // ============================================================================
-
-/**
- * Global file system instance
- *
- * This singleton can be swapped for testing. Use {@link setFileSystem} to
- * inject a mock implementation and {@link resetFileSystem} to restore
- * the real implementation.
- */
-let globalFileSystem: IFileSystem = new RealFileSystem();
-
-/**
- * Get the current global file system instance
- * @returns The current IFileSystem implementation
- */
-export function getFileSystem(): IFileSystem {
-  return globalFileSystem;
-}
-
-/**
- * Set a custom file system implementation
- *
- * Useful for testing to inject a mock file system.
- *
- * @param fs - The file system implementation to use
- *
- * @example
- * ```typescript
- * // In tests
- * const mockFs = new MockFileSystem({ ... });
- * setFileSystem(mockFs);
- *
- * // Run tests...
- *
- * // Cleanup
- * resetFileSystem();
- * ```
- */
-export function setFileSystem(fs: IFileSystem): void {
-  globalFileSystem = fs;
-}
-
-/**
- * Reset to the default RealFileSystem implementation
- *
- * Should be called in test cleanup to restore normal operation.
- */
-export function resetFileSystem(): void {
-  globalFileSystem = new RealFileSystem();
-}

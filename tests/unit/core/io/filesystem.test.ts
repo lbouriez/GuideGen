@@ -8,9 +8,6 @@ import 'reflect-metadata';
 import {
   MockFileSystem,
   RealFileSystem,
-  getFileSystem,
-  setFileSystem,
-  resetFileSystem,
   type IFileSystem,
 } from '../../../../src/core/io/filesystem.js';
 
@@ -290,36 +287,6 @@ describe('RealFileSystem', () => {
   });
 });
 
-describe('Global FileSystem Functions', () => {
-  afterEach(() => {
-    resetFileSystem();
-  });
-
-  it('should get default file system', () => {
-    const fs = getFileSystem();
-    expect(fs).toBeDefined();
-    expect(typeof fs.readFile).toBe('function');
-  });
-
-  it('should set custom file system', () => {
-    const mockFs = new MockFileSystem({
-      '/test.txt': 'test content',
-    });
-
-    setFileSystem(mockFs);
-    const fs = getFileSystem();
-
-    expect(fs.existsSync('/test.txt')).toBe(true);
-  });
-
-  it('should reset to real file system', () => {
-    const mockFs = new MockFileSystem();
-    setFileSystem(mockFs);
-
-    resetFileSystem();
-    const fs = getFileSystem();
-
-    // After reset, should be RealFileSystem (instanceof check)
-    expect(fs).toBeInstanceOf(RealFileSystem);
-  });
-});
+// NOTE: Global FileSystem functions (getFileSystem, setFileSystem, resetFileSystem)
+// have been removed in favor of dependency injection.
+// Use the DI container to get IFileSystem instances instead.
