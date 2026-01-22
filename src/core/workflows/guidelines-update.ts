@@ -13,6 +13,7 @@ import { promptUpdateMode, confirmChanges } from '../../utils/interactive';
 import { transformPatterns } from '../phases/guidelines/transformer';
 import { printSuccess } from '../../utils/display';
 import { GuidelineFileService } from './services';
+import { InputValidator } from '../../validation/input-validator';
 
 export interface GuidelinesWorkflowResult {
   success: boolean;
@@ -35,17 +36,21 @@ export async function runGuidelinesWorkflow(
   onProgress?: (message: string) => void
 ): Promise<GuidelinesWorkflowResult> {
   try {
+    // Validate target path before any operations
+    const validator = new InputValidator();
+    const validatedPath = validator.validatePath(targetPath);
+
     const fileService = new GuidelineFileService();
 
     // Determine update mode
-    const updateMode = await determineUpdateMode(fileService, targetPath, interactive, onProgress);
+    const updateMode = await determineUpdateMode(fileService, validatedPath, interactive, onProgress);
     if (updateMode === 'cancelled') {
       return { success: true, guidelinesGenerated: 0, mode: 'cancelled' };
     }
 
     // Apply override if requested
     if (updateMode === 'override') {
-      fileService.deleteAll(targetPath);
+      fileService.deleteAll(validatedPath);
     }
 
     // Transform patterns
@@ -65,7 +70,7 @@ export async function runGuidelinesWorkflow(
     const guidelines = await generateAllGuidelines(
       client,
       transformedPatterns,
-      targetPath,
+      validatedPath,
       techProfile.structure,
       techProfile,
       (current, total, name) => {
@@ -84,7 +89,7 @@ export async function runGuidelinesWorkflow(
       return await handleUpdateMode(
         client,
         fileService,
-        targetPath,
+        validatedPath,
         guidelines,
         interactive,
         onProgress
@@ -93,7 +98,7 @@ export async function runGuidelinesWorkflow(
 
     // New or override mode - write directly
     if (onProgress) onProgress('Writing guidelines...');
-    fileService.writeAll(targetPath, guidelines);
+    fileService.writeAll(validatedPath, guidelines);
 
     printSuccess(`\n✓ Guidelines created: ${guidelines.length} files`);
 
