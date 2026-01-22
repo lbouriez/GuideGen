@@ -10,6 +10,7 @@ import { ProviderConfigManager } from './config-manager';
 import { InteractiveSetup } from './interactive-setup';
 import { ProviderClientFactory } from './client-factory';
 import { ErrorRecoveryHandler } from './error-recovery';
+import { RateLimiterWithRetry } from '../services/rate-limiter';
 
 export class ProviderManager {
   private static instance: ProviderManager;
@@ -20,12 +21,15 @@ export class ProviderManager {
   private interactiveSetup: InteractiveSetup;
   private clientFactory: ProviderClientFactory;
   private errorRecovery: ErrorRecoveryHandler;
+  private rateLimiter: RateLimiterWithRetry;
 
   private constructor() {
     this.configManager = new ProviderConfigManager();
     this.interactiveSetup = new InteractiveSetup();
     this.clientFactory = new ProviderClientFactory();
     this.errorRecovery = new ErrorRecoveryHandler();
+    // Rate limiter: 3 concurrent requests, 500ms between calls, 3 retries, 2s initial retry delay
+    this.rateLimiter = new RateLimiterWithRetry(3, 500, 3, 2000);
   }
 
   static getInstance(): ProviderManager {
@@ -84,7 +88,7 @@ export class ProviderManager {
   }
 
   /**
-   * Wrap client with error recovery
+   * Wrap client with rate limiting and error recovery
    */
   private wrapClientWithErrorRecovery(originalClient: IProviderClient, depth: AnalysisDepth): IProviderClient {
     return {
@@ -92,51 +96,57 @@ export class ProviderManager {
       getModelType: () => originalClient.getModelType(),
 
       complete: async (systemPrompt: string, userPrompt: string, options?: CompletionOptions) => {
-        try {
-          return await originalClient.complete(systemPrompt, userPrompt, options);
-        } catch (error: unknown) {
-          if (this.errorRecovery.shouldReconfigureProvider(error)) {
-            return await this.errorRecovery.handleProviderError(
-              error,
-              depth,
-              async (depth) => await this.reconfigureProvider(depth),
-              async () => this.client!.complete(systemPrompt, userPrompt, options)
-            );
+        return this.rateLimiter.throttleWithRetry(async () => {
+          try {
+            return await originalClient.complete(systemPrompt, userPrompt, options);
+          } catch (error: unknown) {
+            if (this.errorRecovery.shouldReconfigureProvider(error)) {
+              return await this.errorRecovery.handleProviderError(
+                error,
+                depth,
+                async (depth) => await this.reconfigureProvider(depth),
+                async () => this.client!.complete(systemPrompt, userPrompt, options)
+              );
+            }
+            throw error;
           }
-          throw error;
-        }
+        });
       },
 
-      completeWithJson: async (systemPrompt: string, userPrompt: string, options?: CompletionOptions) => {
-        try {
-          return await originalClient.completeWithJson(systemPrompt, userPrompt, options);
-        } catch (error: unknown) {
-          if (this.errorRecovery.shouldReconfigureProvider(error)) {
-            return await this.errorRecovery.handleProviderError(
-              error,
-              depth,
-              async (depth) => await this.reconfigureProvider(depth),
-              async () => this.client!.completeWithJson(systemPrompt, userPrompt, options)
-            );
+      completeWithJson: async <T = unknown>(systemPrompt: string, userPrompt: string, options?: CompletionOptions): Promise<T> => {
+        return this.rateLimiter.throttleWithRetry(async () => {
+          try {
+            return await originalClient.completeWithJson<T>(systemPrompt, userPrompt, options);
+          } catch (error: unknown) {
+            if (this.errorRecovery.shouldReconfigureProvider(error)) {
+              return await this.errorRecovery.handleProviderError(
+                error,
+                depth,
+                async (depth) => await this.reconfigureProvider(depth),
+                async () => this.client!.completeWithJson<T>(systemPrompt, userPrompt, options)
+              );
+            }
+            throw error;
           }
-          throw error;
-        }
+        });
       },
 
       sendMessage: async (systemPrompt: string, userPrompt: string, options?: CompletionOptions) => {
-        try {
-          return await originalClient.sendMessage(systemPrompt, userPrompt, options);
-        } catch (error: unknown) {
-          if (this.errorRecovery.shouldReconfigureProvider(error)) {
-            return await this.errorRecovery.handleProviderError(
-              error,
-              depth,
-              async (depth) => await this.reconfigureProvider(depth),
-              async () => this.client!.sendMessage(systemPrompt, userPrompt, options)
-            );
+        return this.rateLimiter.throttleWithRetry(async () => {
+          try {
+            return await originalClient.sendMessage(systemPrompt, userPrompt, options);
+          } catch (error: unknown) {
+            if (this.errorRecovery.shouldReconfigureProvider(error)) {
+              return await this.errorRecovery.handleProviderError(
+                error,
+                depth,
+                async (depth) => await this.reconfigureProvider(depth),
+                async () => this.client!.sendMessage(systemPrompt, userPrompt, options)
+              );
+            }
+            throw error;
           }
-          throw error;
-        }
+        });
       },
     };
   }

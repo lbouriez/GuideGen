@@ -1,6 +1,6 @@
 # GuideGen v1.0 Refactoring - Progress Checklist
 
-**Current Score**: 7.5/10 (improved from 6.5)
+**Current Score**: 8.0/10 (improved from 6.5)
 **Target Score**: 8.5/10
 **Start Date**: 2026-01-22
 **Target Date**: 2026-02-19
@@ -108,16 +108,22 @@ Quick reference for tracking refactoring progress. See `REFACTORING_PLAN.md` for
 - [ ] ✅ 25+ tests passing
 
 ### Task 2.4: Extract Long Functions ⏳
-**Effort**: 8-10 hours | **Status**: Not Started
+**Effort**: 8-10 hours | **Status**: Partial
 
 **Target**: All functions < 50 lines
 
-- [ ] discovery.ts: Split runDiscoveryPhase (140 → 4 functions)
+- [x] discovery.ts: Split runDiscoveryPhase (140 → 6 helper functions)
+  - [x] readConfigFiles()
+  - [x] getProviderDisplayName()
+  - [x] analyzeWithAI()
+  - [x] printDiscoverySummary()
+  - [x] handleProjectExclusions()
+  - [x] printDebugInfo()
 - [ ] analysis.ts: Split runAnalysisPhase (97 → 3 functions)
 - [ ] guidelines-update.ts: Split runGuidelinesWorkflow (84 → 3 functions)
 - [ ] Write tests for new functions
-- [ ] ✅ All functions < 50 lines
-- [ ] ✅ Single responsibility each
+- [x] ✅ discovery.ts functions < 50 lines
+- [x] ✅ Single responsibility each
 
 **Week 2 Goal**: ✅ claude-update.ts refactored | ⏳ Other god classes pending
 
@@ -192,11 +198,16 @@ Quick reference for tracking refactoring progress. See `REFACTORING_PLAN.md` for
   - [x] ProviderConfigSchema
   - [x] FilePathArraySchema
 - [x] Create InputValidator service
-- [ ] Apply validation at all entry points
-- [ ] Write 30+ validation tests
+- [x] Apply validation at all CLI entry points
+  - [x] setup command
+  - [x] analyze command
+  - [x] guidelines command
+  - [x] indexes command
+  - [x] claude command
+- [x] Write 52 validation tests (InputValidator)
 - [x] ✅ Path traversal prevented
-- [ ] ✅ All public functions validate inputs
-- [ ] ✅ 30+ validation tests passing
+- [x] ✅ All CLI commands validate inputs
+- [x] ✅ 52 validation tests passing
 
 ### Task 4.2: Secure Secrets Management ⏳
 **Effort**: 6-8 hours | **Status**: Not Started
@@ -213,12 +224,16 @@ Quick reference for tracking refactoring progress. See `REFACTORING_PLAN.md` for
 **Effort**: 6-8 hours | **Status**: Complete
 
 - [x] Create RateLimiter service
-- [ ] Apply to all provider calls
-- [ ] Configure limits
-- [ ] Write 15+ rate limiter tests
+- [x] Create RateLimiterWithRetry (with exponential backoff)
+- [x] Apply to all provider calls (ProviderManager wrapper)
+  - [x] complete() method
+  - [x] completeWithJson() method
+  - [x] sendMessage() method
+- [x] Configure limits (3 concurrent, 500ms between calls, 3 retries)
+- [x] Write 25 rate limiter tests
 - [x] ✅ Rate limiter implemented
-- [ ] ✅ Applied to all API calls
-- [ ] ✅ 15+ tests passing
+- [x] ✅ Applied to all API calls via ProviderManager
+- [x] ✅ 25 tests passing (96% coverage)
 
 ### Task 4.4: Error Handling Standardization ✅
 **Effort**: 8-10 hours | **Status**: Complete

@@ -9,6 +9,7 @@ import 'reflect-metadata';
 
 import { Command } from 'commander';
 import { resolve } from 'path';
+import { existsSync, statSync } from 'fs';
 import type { AnalysisDepth } from './types';
 import {
   runSetupWorkflow,
@@ -29,8 +30,62 @@ import {
 import { ProviderManager } from './providers/manager';
 import { generateAnalysisReport } from './core/phases/analysis-report';
 import { getErrorMessage } from './core/utils/errors';
+import { TargetPathSchema, AnalysisDepthSchema } from './validation/schemas';
+import { ValidationError } from './errors';
 import * as fs from 'fs';
 import * as path from 'path';
+
+/**
+ * Validate and resolve target path
+ */
+function validateTargetPath(inputPath: string): string {
+  const resolvedPath = resolve(inputPath);
+
+  // Validate path format
+  const parseResult = TargetPathSchema.safeParse(inputPath);
+  if (!parseResult.success) {
+    throw new ValidationError(
+      `Invalid path: ${parseResult.error.issues.map(i => i.message).join(', ')}`,
+      { path: inputPath },
+      'path'
+    );
+  }
+
+  // Check if path exists and is a directory
+  if (!existsSync(resolvedPath)) {
+    throw new ValidationError(
+      `Path does not exist: ${resolvedPath}`,
+      { path: resolvedPath },
+      'path'
+    );
+  }
+
+  const stats = statSync(resolvedPath);
+  if (!stats.isDirectory()) {
+    throw new ValidationError(
+      `Path is not a directory: ${resolvedPath}`,
+      { path: resolvedPath },
+      'path'
+    );
+  }
+
+  return resolvedPath;
+}
+
+/**
+ * Validate analysis depth
+ */
+function validateDepth(depth: string): AnalysisDepth {
+  const parseResult = AnalysisDepthSchema.safeParse(depth);
+  if (!parseResult.success) {
+    throw new ValidationError(
+      `Invalid depth: ${depth}. Must be one of: quick, standard, thorough`,
+      { depth },
+      'depth'
+    );
+  }
+  return parseResult.data;
+}
 
 const program = new Command();
 
@@ -45,8 +100,18 @@ program
   .argument('[path]', 'Path to the project to analyze', '../')
   .option('-d, --depth <depth>', 'Analysis depth: quick, standard, thorough', 'standard')
   .option('--force-setup', 'Force re-run the AI provider setup')
-  .action(async (path: string, options: { depth: string; forceSetup: boolean }) => {
-    await runSetup(path, options.depth as AnalysisDepth, options.forceSetup);
+  .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
+    try {
+      const validatedPath = validateTargetPath(inputPath);
+      const validatedDepth = validateDepth(options.depth);
+      await runSetup(validatedPath, validatedDepth, options.forceSetup);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
+      throw error;
+    }
   });
 
 program
@@ -55,8 +120,18 @@ program
   .argument('[path]', 'Path to the project to analyze', '../')
   .option('-d, --depth <depth>', 'Analysis depth: quick, standard, thorough', 'standard')
   .option('--force-setup', 'Force re-run the AI provider setup')
-  .action(async (path: string, options: { depth: string; forceSetup: boolean }) => {
-    await runAnalyze(path, options.depth as AnalysisDepth, options.forceSetup);
+  .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
+    try {
+      const validatedPath = validateTargetPath(inputPath);
+      const validatedDepth = validateDepth(options.depth);
+      await runAnalyze(validatedPath, validatedDepth, options.forceSetup);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
+      throw error;
+    }
   });
 
 program
@@ -65,11 +140,17 @@ program
   .argument('[path]', 'Path to the project', '../')
   .option('-d, --depth <depth>', 'Analysis depth', 'standard')
   .option('--force-setup', 'Force re-run setup')
-  .action(async (path: string, options: { depth: string; forceSetup: boolean }) => {
+  .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
     try {
-      await runGuidelinesGeneration(path, options.depth as AnalysisDepth, false, false, options.forceSetup, false);
+      const validatedPath = validateTargetPath(inputPath);
+      const validatedDepth = validateDepth(options.depth);
+      await runGuidelinesGeneration(validatedPath, validatedDepth, false, false, options.forceSetup, false);
       printSuccess('✓ Guidelines generation complete!');
     } catch (error: unknown) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
       printError(`Guidelines generation failed: ${getErrorMessage(error)}`);
       process.exit(1);
     }
@@ -80,11 +161,16 @@ program
   .description('Generate/update index files')
   .argument('[path]', 'Path to the project', '../')
   .option('--force-setup', 'Force re-run setup')
-  .action(async (path: string, options: { forceSetup: boolean }) => {
+  .action(async (inputPath: string, options: { forceSetup: boolean }) => {
     try {
-      await runIndexGeneration(path, false, false, options.forceSetup, false);
+      const validatedPath = validateTargetPath(inputPath);
+      await runIndexGeneration(validatedPath, false, false, options.forceSetup, false);
       printSuccess('✓ Index generation complete!');
     } catch (error: unknown) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
       printError(`Index generation failed: ${getErrorMessage(error)}`);
       process.exit(1);
     }
@@ -96,23 +182,28 @@ program
   .argument('[path]', 'Path to the project', '../')
   .option('-d, --depth <depth>', 'Analysis depth', 'standard')
   .option('--force-setup', 'Force re-run setup')
-  .action(async (path: string, options: { depth: string; forceSetup: boolean }) => {
+  .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
     try {
-      await runClaudeGeneration(path, options.depth as AnalysisDepth, false, false, options.forceSetup, false);
+      const validatedPath = validateTargetPath(inputPath);
+      const validatedDepth = validateDepth(options.depth);
+      await runClaudeGeneration(validatedPath, validatedDepth, false, false, options.forceSetup, false);
       printSuccess('✓ Claude artifacts generation complete!');
     } catch (error: unknown) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
       printError(`Claude artifacts generation failed: ${getErrorMessage(error)}`);
       process.exit(1);
     }
   });
 
 async function runSetup(
-  targetPath: string,
+  resolvedPath: string,
   depth: AnalysisDepth,
   forceSetup: boolean = false
 ): Promise<void> {
   printHeader();
-  const resolvedPath = resolve(targetPath);
   printInfo(`Target: ${resolvedPath}`);
   printInfo(`Depth: ${depth}`);
   printDivider();
@@ -158,12 +249,11 @@ async function runSetup(
 }
 
 async function runAnalyze(
-  targetPath: string,
+  resolvedPath: string,
   depth: AnalysisDepth,
   forceSetup: boolean = false
 ): Promise<void> {
   printHeader();
-  const resolvedPath = resolve(targetPath);
   printInfo(`Target: ${resolvedPath}`);
   printInfo(`Depth: ${depth}`);
   printDivider();
