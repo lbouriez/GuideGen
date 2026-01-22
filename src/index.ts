@@ -4,6 +4,9 @@
  * GuideGen CLI - AI-Powered Guideline Generator
  */
 
+// Must be imported first for DI decorators to work
+import 'reflect-metadata';
+
 import { Command } from 'commander';
 import { resolve } from 'path';
 import type { AnalysisDepth } from './types';

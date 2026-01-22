@@ -3,6 +3,7 @@
  * Provides a testable interface for file operations
  */
 
+import { injectable } from 'inversify';
 import type { Dirent, Stats } from 'fs';
 
 /**
@@ -31,6 +32,7 @@ export interface IFileSystem {
 /**
  * Real file system implementation using Node.js fs module
  */
+@injectable()
 export class RealFileSystem implements IFileSystem {
   private fs = require('fs');
   private fsPromises = require('fs').promises;
@@ -92,6 +94,7 @@ export class RealFileSystem implements IFileSystem {
 /**
  * Mock file system for testing
  */
+@injectable()
 export class MockFileSystem implements IFileSystem {
   private files: Map<string, string> = new Map();
   private directories: Set<string> = new Set();
