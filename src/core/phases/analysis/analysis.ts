@@ -10,6 +10,7 @@ import type {
   PhaseResult,
   AnalysisDepth,
 } from '@/types';
+import type { IProviderClient } from '@/providers/types';
 import { createProviderClient } from '@/providers/manager';
 import {
   createSpinner,
@@ -25,6 +26,97 @@ import {
 import { ToolRegistry } from '../../utils';
 import type { SelectedFiles, FileSelectionCriteria, ConcatenatedFiles } from '../../utils';
 
+/**
+ * Select files for analysis using AI-powered selection
+ */
+async function selectFilesForAnalysis(
+  toolRegistry: ToolRegistry,
+  client: IProviderClient,
+  techProfile: TechProfile,
+  depth: AnalysisDepth,
+  debug: boolean
+): Promise<SelectedFiles> {
+  const fileSelectionCriteria: FileSelectionCriteria = {
+    projectStructure: techProfile.structure!,
+    techProfile,
+    depth,
+  };
+
+  const result = await toolRegistry.executeTool<FileSelectionCriteria, SelectedFiles>(
+    'file_selection',
+    fileSelectionCriteria,
+    client
+  );
+
+  if (!result.success || !result.data) {
+    throw new Error(`File selection failed: ${result.error}`);
+  }
+
+  if (debug) {
+    printDebugFileSelection(result.data);
+  }
+
+  return result.data;
+}
+
+/**
+ * Print debug information about file selection
+ */
+function printDebugFileSelection(selectedFiles: SelectedFiles): void {
+  printInfo(`[DEBUG] AI selected ${selectedFiles.files.length} files for analysis:`);
+  selectedFiles.files.forEach(file => {
+    const priority = typeof file.priority === 'string' ? file.priority.toUpperCase() : 'UNKNOWN';
+    printInfo(`[DEBUG]   ${priority}: ${file.path} - ${file.reason}`);
+  });
+  printInfo(`[DEBUG] Estimated total tokens: ${selectedFiles.totalEstimatedTokens}`);
+}
+
+/**
+ * Read and concatenate selected files
+ */
+async function readSelectedFiles(
+  toolRegistry: ToolRegistry,
+  client: IProviderClient,
+  targetPath: string,
+  selectedFiles: SelectedFiles,
+  debug: boolean
+): Promise<ConcatenatedFiles> {
+  const filePaths = selectedFiles.files.map(f => join(targetPath, f.path));
+
+  const result = await toolRegistry.executeTool<string[], ConcatenatedFiles>(
+    'file_reading',
+    filePaths,
+    client
+  );
+
+  if (!result.success || !result.data) {
+    throw new Error(`File reading failed: ${result.error}`);
+  }
+
+  if (debug) {
+    printInfo(`[DEBUG] Successfully read ${result.data.fileCount} files`);
+    printInfo(`[DEBUG] Total content size: ${result.data.totalSize} characters`);
+  }
+
+  return result.data;
+}
+
+/**
+ * Analyze patterns using AI
+ */
+async function analyzePatterns(
+  client: IProviderClient,
+  techProfile: TechProfile,
+  fileContent: string
+): Promise<PatternReport> {
+  const projectType = determineProjectType(techProfile);
+
+  return client.completeWithJson<PatternReport>(
+    ANALYSIS_SYSTEM_PROMPT,
+    ANALYSIS_USER_PROMPT(JSON.stringify(techProfile, null, 2), fileContent, projectType)
+  );
+}
+
 export async function runAnalysisPhase(
   targetPath: string,
   techProfile: TechProfile,
@@ -38,80 +130,31 @@ export async function runAnalysisPhase(
     const client = await createProviderClient(depth);
     const toolRegistry = ToolRegistry.getInstance();
 
-    // Step 1: Use AI to intelligently select files
+    // Step 1: Select files for analysis
     spinner.text = 'Selecting most relevant files for analysis...';
-
-    const fileSelectionCriteria: FileSelectionCriteria = {
-      projectStructure: techProfile.structure!,
-      techProfile,
-      depth,
-    };
-
-    const fileSelectionResult = await toolRegistry.executeTool<FileSelectionCriteria, SelectedFiles>(
-      'file_selection',
-      fileSelectionCriteria,
-      client
+    const selectedFiles = await selectFilesForAnalysis(
+      toolRegistry, client, techProfile, depth, debug
     );
 
-    if (!fileSelectionResult.success || !fileSelectionResult.data) {
-      throw new Error(`File selection failed: ${fileSelectionResult.error}`);
-    }
-
-    const selectedFiles = fileSelectionResult.data;
-
-    if (debug) {
-      printInfo(`[DEBUG] AI selected ${selectedFiles.files.length} files for analysis:`);
-      selectedFiles.files.forEach(file => {
-        const priority = typeof file.priority === 'string' ? file.priority.toUpperCase() : 'UNKNOWN';
-        printInfo(`[DEBUG]   ${priority}: ${file.path} - ${file.reason}`);
-      });
-      printInfo(`[DEBUG] Estimated total tokens: ${selectedFiles.totalEstimatedTokens}`);
-    }
-
-    // Step 2: Read and concatenate selected files
+    // Step 2: Read selected files
     spinner.text = `Reading ${selectedFiles.files.length} selected files...`;
-
-    const filePaths = selectedFiles.files.map(f => join(targetPath, f.path));
-    const fileReadingResult = await toolRegistry.executeTool<string[], ConcatenatedFiles>(
-      'file_reading',
-      filePaths,
-      client
+    const concatenatedFiles = await readSelectedFiles(
+      toolRegistry, client, targetPath, selectedFiles, debug
     );
 
-    if (!fileReadingResult.success || !fileReadingResult.data) {
-      throw new Error(`File reading failed: ${fileReadingResult.error}`);
-    }
-
-    const concatenatedFiles = fileReadingResult.data;
-
-    if (debug) {
-      printInfo(`[DEBUG] Successfully read ${concatenatedFiles.fileCount} files`);
-      printInfo(`[DEBUG] Total content size: ${concatenatedFiles.totalSize} characters`);
-    }
-
-    // Step 3: Analyze patterns using the comprehensive file content
+    // Step 3: Analyze patterns
     spinner.text = 'Analyzing code patterns and architecture...';
-
-    // Determine project type for better AI guidance
-    const projectType = determineProjectType(techProfile);
-
-    const patternReport = await client.completeWithJson<PatternReport>(
-      ANALYSIS_SYSTEM_PROMPT,
-      ANALYSIS_USER_PROMPT(JSON.stringify(techProfile, null, 2), concatenatedFiles.content, projectType)
-    );
+    const patternReport = await analyzePatterns(client, techProfile, concatenatedFiles.content);
 
     spinner.stop();
     printSuccess('Analysis phase complete');
-
-    // Print summary
     printPatternSummary(patternReport);
 
     return {
       success: true,
       data: patternReport,
       humanReviewRequired: true,
-      reviewPrompt:
-        'Please review the detected patterns. Do these look accurate? (y/n)',
+      reviewPrompt: 'Please review the detected patterns. Do these look accurate? (y/n)',
     };
   } catch (error) {
     spinner.stop();
