@@ -29,7 +29,51 @@ import { runAnalysisPhase } from '../phases/analysis';
 import { logger } from '@/utils/logger';
 
 /**
- * Wrapper for guidelines generation command
+ * Generate project-specific coding guidelines based on existing code patterns
+ *
+ * This command orchestrates the full guidelines generation workflow:
+ * 1. Discovers project tech stack and structure
+ * 2. Analyzes code patterns and conventions
+ * 3. Generates comprehensive guidelines across domains (backend, frontend, shared)
+ *
+ * @param targetPath - Absolute or relative path to the project root directory
+ * @param depth - Analysis depth level controlling AI model selection and detail
+ *                'quick' - Fast analysis with smaller models
+ *                'standard' - Balanced approach (recommended)
+ *                'thorough' - Comprehensive analysis with larger models
+ * @param skipConfirm - If true, skips user confirmation prompts
+ * @param overwrite - If true, overwrites existing guidelines without merging
+ * @param forceSetup - If true, re-runs provider configuration setup
+ * @param debug - If true, enables detailed logging for troubleshooting
+ *
+ * @throws {Error} If discovery, analysis, or generation phases fail
+ * @throws {PathTraversalError} If targetPath contains directory escape attempts
+ *
+ * @example
+ * ```typescript
+ * // Generate guidelines for current project
+ * await runGuidelinesGeneration(
+ *   process.cwd(),
+ *   'standard',
+ *   false,  // require confirmation
+ *   false,  // merge with existing
+ *   false,  // use existing provider config
+ *   false   // normal logging
+ * );
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Quick generation with debug logging
+ * await runGuidelinesGeneration(
+ *   './my-project',
+ *   'quick',
+ *   true,   // skip confirmations
+ *   false,
+ *   false,
+ *   true    // enable debug output
+ * );
+ * ```
  */
 export async function runGuidelinesGeneration(
   targetPath: string,
@@ -81,7 +125,37 @@ export async function runGuidelinesGeneration(
 }
 
 /**
- * Wrapper for index generation command
+ * Generate markdown index files for project guidelines
+ *
+ * Creates organized index files that catalog all generated guidelines,
+ * making them easily discoverable and navigable. Indexes are generated
+ * per domain (backend, frontend, shared) and include metadata about
+ * each guideline.
+ *
+ * @param targetPath - Absolute or relative path to the project root directory
+ * @param skipConfirm - If true, skips user confirmation prompts
+ * @param overwrite - If true, overwrites existing index files
+ * @param forceSetup - If true, re-runs provider configuration setup
+ * @param debug - If true, enables detailed logging for troubleshooting
+ *
+ * @throws {Error} If discovery or index generation fails
+ * @throws {PathTraversalError} If targetPath contains directory escape attempts
+ *
+ * @example
+ * ```typescript
+ * // Generate indexes for existing guidelines
+ * await runIndexGeneration(
+ *   process.cwd(),
+ *   false,  // require confirmation
+ *   false,  // merge with existing
+ *   false,  // use existing provider config
+ *   false   // normal logging
+ * );
+ * ```
+ *
+ * @remarks
+ * This command requires existing guidelines to be present in the .guidelines directory.
+ * Run `runGuidelinesGeneration()` first if guidelines don't exist yet.
  */
 export async function runIndexGeneration(
   targetPath: string,
@@ -129,7 +203,47 @@ export async function runIndexGeneration(
 }
 
 /**
- * Wrapper for Claude artifacts generation command
+ * Generate Claude Code artifacts (skills and agents) from project guidelines
+ *
+ * Creates custom Claude Code skills and agents tailored to your project's
+ * specific patterns and conventions. These artifacts help Claude Code
+ * understand and follow your project's guidelines automatically.
+ *
+ * Generated artifacts include:
+ * - Custom skills for project-specific tasks
+ * - Specialized agents for workflow automation
+ * - CLAUDE.md file with project context and references
+ *
+ * @param targetPath - Absolute or relative path to the project root directory
+ * @param depth - Analysis depth level controlling AI model selection
+ *                'quick' - Fast generation with smaller models
+ *                'standard' - Balanced approach (recommended)
+ *                'thorough' - Comprehensive generation with larger models
+ * @param skipConfirm - If true, skips user confirmation prompts
+ * @param overwrite - If true, overwrites existing artifacts
+ * @param forceSetup - If true, re-runs provider configuration setup
+ * @param debug - If true, enables detailed logging for troubleshooting
+ *
+ * @throws {Error} If discovery or artifact generation fails
+ * @throws {PathTraversalError} If targetPath contains directory escape attempts
+ *
+ * @example
+ * ```typescript
+ * // Generate Claude artifacts for current project
+ * await runClaudeGeneration(
+ *   process.cwd(),
+ *   'standard',
+ *   false,  // require confirmation
+ *   false,  // merge with existing
+ *   false,  // use existing provider config
+ *   false   // normal logging
+ * );
+ * ```
+ *
+ * @remarks
+ * This command requires existing guidelines in .guidelines directory.
+ * Run `runGuidelinesGeneration()` first if guidelines don't exist.
+ * Generated artifacts are written to .claude/ directory and CLAUDE.md file.
  */
 export async function runClaudeGeneration(
   targetPath: string,
