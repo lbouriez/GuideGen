@@ -135,11 +135,11 @@ describe('Indexes Workflow', () => {
     it('should fail when indexes have broken links', async () => {
       // Setup: Guidelines exist
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation((path: string) => {
-        if (path.includes('.guidelines')) {
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (path.includes('.guidelines') && options?.withFileTypes) {
           return [{ name: 'shared', isDirectory: () => true }] as any;
         }
-        return ['naming.md'] as any;
+        return ['naming.md'];
       });
       mockFs.readFileSync.mockReturnValue('# Naming Guidelines');
 
@@ -182,11 +182,11 @@ describe('Indexes Workflow', () => {
 
     it('should fail when indexes reference non-existent guidelines', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation((path: string) => {
-        if (path.includes('.guidelines')) {
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (path.includes('.guidelines') && options?.withFileTypes) {
           return [{ name: 'shared', isDirectory: () => true }] as any;
         }
-        return ['naming.md'] as any;
+        return ['naming.md'];
       });
       mockFs.readFileSync.mockReturnValue('# Naming');
 
@@ -281,7 +281,12 @@ describe('Indexes Workflow', () => {
 
     it('should pass progress callbacks during generation', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation(() => [{ name: 'shared', isDirectory: () => true }] as any);
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (options?.withFileTypes) {
+          return [{ name: 'shared', isDirectory: () => true }] as any;
+        }
+        return ['naming.md'];
+      });
       mockFs.readFileSync.mockReturnValue('# Content');
 
       mockGenerateAllIndexes.mockResolvedValue([
@@ -384,7 +389,12 @@ describe('Indexes Workflow', () => {
 
     it('should handle user cancellation during merge confirmation', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation(() => [{ name: 'shared', isDirectory: () => true }] as any);
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (options?.withFileTypes) {
+          return [{ name: 'shared', isDirectory: () => true }] as any;
+        }
+        return ['naming.md'];
+      });
       mockFs.readFileSync.mockReturnValue('# Content');
 
       mockPromptUpdateMode.mockResolvedValue('update');
@@ -433,7 +443,12 @@ describe('Indexes Workflow', () => {
   describe('override mode', () => {
     it('should delete existing indexes and create new ones', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation(() => [{ name: 'shared', isDirectory: () => true }] as any);
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (options?.withFileTypes) {
+          return [{ name: 'shared', isDirectory: () => true }] as any;
+        }
+        return ['naming.md'];
+      });
       mockFs.readFileSync.mockReturnValue('# Content');
 
       mockPromptUpdateMode.mockResolvedValue('override');
@@ -468,7 +483,12 @@ describe('Indexes Workflow', () => {
   describe('interactive mode - user cancellation', () => {
     it('should return cancelled when user cancels at update prompt', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation(() => [{ name: 'shared', isDirectory: () => true }] as any);
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (options?.withFileTypes) {
+          return [{ name: 'shared', isDirectory: () => true }] as any;
+        }
+        return ['naming.md'];
+      });
 
       mockPromptUpdateMode.mockResolvedValue('cancel');
 
@@ -490,7 +510,12 @@ describe('Indexes Workflow', () => {
   describe('error recovery', () => {
     it('should handle generation errors gracefully', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation(() => [{ name: 'shared', isDirectory: () => true }] as any);
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (options?.withFileTypes) {
+          return [{ name: 'shared', isDirectory: () => true }] as any;
+        }
+        return ['naming.md'];
+      });
       mockFs.readFileSync.mockReturnValue('# Content');
 
       mockGenerateAllIndexes.mockRejectedValue(new Error('AI service timeout'));
@@ -509,7 +534,12 @@ describe('Indexes Workflow', () => {
 
     it('should handle file system errors during write', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation(() => [{ name: 'shared', isDirectory: () => true }] as any);
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (options?.withFileTypes) {
+          return [{ name: 'shared', isDirectory: () => true }] as any;
+        }
+        return ['naming.md'];
+      });
       mockFs.readFileSync.mockReturnValue('# Content');
 
       mockGenerateAllIndexes.mockResolvedValue([
@@ -543,7 +573,12 @@ describe('Indexes Workflow', () => {
 
     it('should handle merge errors gracefully', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation(() => [{ name: 'shared', isDirectory: () => true }] as any);
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (options?.withFileTypes) {
+          return [{ name: 'shared', isDirectory: () => true }] as any;
+        }
+        return ['naming.md'];
+      });
       mockFs.readFileSync.mockReturnValue('# Content');
 
       mockPromptUpdateMode.mockResolvedValue('update');
@@ -579,10 +614,15 @@ describe('Indexes Workflow', () => {
   describe('complex validation scenarios', () => {
     it('should detect multiple validation errors across different indexes', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readdirSync.mockImplementation(() => [
-        { name: 'shared', isDirectory: () => true },
-        { name: 'backend', isDirectory: () => true },
-      ] as any);
+      mockFs.readdirSync.mockImplementation((path: string, options?: { withFileTypes?: boolean }) => {
+        if (options?.withFileTypes) {
+          return [
+            { name: 'shared', isDirectory: () => true },
+            { name: 'backend', isDirectory: () => true },
+          ] as any;
+        }
+        return ['naming.md', 'security.md'];
+      });
       mockFs.readFileSync.mockReturnValue('# Content');
 
       const mockIndexes: GeneratedIndex[] = [

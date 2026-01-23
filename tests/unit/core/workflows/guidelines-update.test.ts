@@ -35,14 +35,18 @@ vi.mock('../../../../src/core/phases/guidelines/transformer.js', () => ({
   transformPatterns: vi.fn((patterns) => patterns),
 }));
 
-vi.mock('../../../../src/core/workflows/services/index.js', () => ({
-  GuidelineFileService: vi.fn().mockImplementation(() => ({
-    exists: vi.fn(),
-    deleteAll: vi.fn(),
-    readAll: vi.fn(),
-    writeAll: vi.fn(),
-  })),
-}));
+vi.mock('../../../../src/core/workflows/services/index.js', () => {
+  class MockGuidelineFileService {
+    exists = vi.fn();
+    deleteAll = vi.fn();
+    readAll = vi.fn();
+    writeAll = vi.fn();
+  }
+
+  return {
+    GuidelineFileService: MockGuidelineFileService,
+  };
+});
 
 describe('Guidelines Workflow', () => {
   let mockClient: any;
@@ -110,7 +114,7 @@ describe('Guidelines Workflow', () => {
     mockConfirmChanges = vi.mocked(interactive.confirmChanges);
 
     // Mock file service
-    mockFileService = new (vi.mocked(GuidelineFileService))();
+    mockFileService = new GuidelineFileService();
   });
 
   describe('error handling - validation failures', () => {
