@@ -23,7 +23,8 @@ import {
   ANALYSIS_SYSTEM_PROMPT,
   ANALYSIS_USER_PROMPT,
 } from './prompts';
-import type { IToolRegistry, SelectedFiles, FileSelectionCriteria, ConcatenatedFiles } from '../../utils';
+import type { SelectedFiles, FileSelectionCriteria, ConcatenatedFiles } from '../../utils';
+import type { IToolRegistry } from '../../utils/registry';
 import { container } from '@/di/container';
 import { TYPES } from '@/di/identifiers';
 
