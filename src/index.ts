@@ -18,7 +18,7 @@ import {
   runClaudeGeneration,
   runDiscoveryPhase,
   runAnalysisPhase,
-} from './core/workflows';
+} from './core/workflows/index.js';
 import {
   printHeader,
   printPhase,
