@@ -24,7 +24,9 @@
       "@/config/*": ["src/config/*"],
       "@/utils/*": ["src/utils/*"],
       "@/core/*": ["src/core/*"],
-      "@/di/*": ["src/di/*"]
+      "@/di/*": ["src/di/*"],
+      "@/validation/*": ["src/validation/*"],
+      "@/errors": ["src/errors/index"]
     }
   },
   "include": ["src/**/*"],
