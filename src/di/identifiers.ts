@@ -42,6 +42,7 @@ export const TYPES = {
   ILogger: Symbol.for('ILogger'),
   IInputValidator: Symbol.for('IInputValidator'),
   IConfigLoader: Symbol.for('IConfigLoader'),
+  IToolRegistry: Symbol.for('IToolRegistry'),
 } as const;
 
 export type DIIdentifiers = typeof TYPES;

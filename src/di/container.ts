@@ -9,6 +9,7 @@ import { TYPES } from './identifiers.js';
 // Services
 import { RateLimiter } from '../services/rate-limiter.js';
 import { InputValidator } from '../validation/input-validator.js';
+import { ToolRegistry } from '../core/utils/registry.js';
 
 // Provider Services
 import { ProviderManager } from '../providers/manager.js';
@@ -33,6 +34,7 @@ import type { IFileSystem } from '../interfaces/services/IFileService.js';
 import type { IRateLimiter } from '../interfaces/services/IProviderService.js';
 import type { IInputValidator } from '../interfaces/services/IValidator.js';
 import type { ILogger } from '../interfaces/services/ILogger.js';
+import type { IToolRegistry } from '../core/utils/registry.js';
 
 /**
  * Create and configure a new DI container
@@ -50,6 +52,9 @@ export function createContainer(): Container {
 
   // Validators
   container.bind<IInputValidator>(TYPES.IInputValidator).to(InputValidator).inSingletonScope();
+
+  // Tool Registry
+  container.bind<IToolRegistry>(TYPES.IToolRegistry).to(ToolRegistry).inSingletonScope();
 
   // Logger (constant value - already exists)
   container.bind<ILogger>(TYPES.ILogger).toConstantValue(logger);

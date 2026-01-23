@@ -23,14 +23,15 @@ import {
   ANALYSIS_SYSTEM_PROMPT,
   ANALYSIS_USER_PROMPT,
 } from './prompts';
-import { ToolRegistry } from '../../utils';
-import type { SelectedFiles, FileSelectionCriteria, ConcatenatedFiles } from '../../utils';
+import type { IToolRegistry, SelectedFiles, FileSelectionCriteria, ConcatenatedFiles } from '../../utils';
+import { container } from '@/di/container';
+import { TYPES } from '@/di/identifiers';
 
 /**
  * Select files for analysis using AI-powered selection
  */
 async function selectFilesForAnalysis(
-  toolRegistry: ToolRegistry,
+  toolRegistry: IToolRegistry,
   client: IProviderClient,
   techProfile: TechProfile,
   depth: AnalysisDepth,
@@ -75,7 +76,7 @@ function printDebugFileSelection(selectedFiles: SelectedFiles): void {
  * Read and concatenate selected files
  */
 async function readSelectedFiles(
-  toolRegistry: ToolRegistry,
+  toolRegistry: IToolRegistry,
   client: IProviderClient,
   targetPath: string,
   selectedFiles: SelectedFiles,
@@ -128,7 +129,7 @@ export async function runAnalysisPhase(
 
   try {
     const client = await createProviderClient(depth);
-    const toolRegistry = ToolRegistry.getInstance();
+    const toolRegistry = container.get<IToolRegistry>(TYPES.IToolRegistry);
 
     // Step 1: Select files for analysis
     spinner.text = 'Selecting most relevant files for analysis...';

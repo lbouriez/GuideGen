@@ -2,6 +2,8 @@
  * Tool registry for managing available tools
  */
 
+import { injectable } from 'inversify';
+import 'reflect-metadata';
 import type { FolderStructure, TechProfile, AnalysisDepth } from '../../types';
 import type { IProviderClient } from '../../providers/types';
 
@@ -49,20 +51,31 @@ export interface ITool<TInput = any, TOutput = any> {
   execute(input: TInput, client: IProviderClient): Promise<ToolResult<TOutput>>;
 }
 
-export class ToolRegistry {
-  private static instance: ToolRegistry;
+/**
+ * Tool registry interface for dependency injection
+ */
+export interface IToolRegistry {
+  registerTool<T extends ITool>(tool: T): void;
+  getTool(name: string): ITool | undefined;
+  getAllTools(): ITool[];
+  executeTool<TInput, TOutput>(
+    toolName: string,
+    input: TInput,
+    client: IProviderClient
+  ): Promise<ToolResult<TOutput>>;
+}
+
+/**
+ * Tool registry implementation
+ * Manages available tools for code analysis workflows
+ */
+@injectable()
+export class ToolRegistry implements IToolRegistry {
   private tools = new Map<string, ITool>();
 
-  private constructor() {
+  constructor() {
     this.registerTool(new FileSelectionTool());
     this.registerTool(new FileReadingTool());
-  }
-
-  static getInstance(): ToolRegistry {
-    if (!ToolRegistry.instance) {
-      ToolRegistry.instance = new ToolRegistry();
-    }
-    return ToolRegistry.instance;
   }
 
   registerTool<T extends ITool>(tool: T): void {

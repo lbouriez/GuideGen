@@ -33,7 +33,9 @@ const mockToolRegistry = {
   executeTool: vi.fn(),
 };
 
-const mockToolRegistryGetInstance = vi.fn(() => mockToolRegistry);
+const mockContainerGet = vi.fn((type: symbol) => {
+  return mockToolRegistry;
+});
 
 vi.mock('@/utils/display', () => ({
   createSpinner: (...args: any[]) => mockCreateSpinner(...args),
@@ -45,11 +47,18 @@ vi.mock('@/utils/display', () => ({
 
 vi.mock('@/providers/manager', () => ({
   createProviderClient: (...args: any[]) => mockCreateProviderClient(...args),
+  ProviderManager: vi.fn(),
 }));
 
-vi.mock('../../../../src/core/utils/index.js', () => ({
-  ToolRegistry: {
-    getInstance: (...args: any[]) => mockToolRegistryGetInstance(...args),
+vi.mock('@/di/container', () => ({
+  container: {
+    get: (...args: any[]) => mockContainerGet(...args),
+  },
+}));
+
+vi.mock('@/di/identifiers', () => ({
+  TYPES: {
+    IToolRegistry: Symbol.for('IToolRegistry'),
   },
 }));
 
