@@ -6,6 +6,7 @@
 import * as path from 'path';
 import type { IProviderClient } from '../../providers/types';
 import type { TechProfile, PatternReport, GeneratedGuideline } from '../../types';
+import type { ILogger } from '../../interfaces/services/ILogger';
 import { generateAllGuidelines } from '../phases/guidelines/generator';
 import { validateAllGuidelines, checkDuplicates } from '../phases/guidelines/validator';
 import { batchIntelligentMerge, formatChanges } from '../phases/intelligent-merge';
@@ -33,7 +34,8 @@ export async function runGuidelinesWorkflow(
   techProfile: TechProfile,
   patterns: PatternReport,
   interactive: boolean = true,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  logger?: ILogger
 ): Promise<GuidelinesWorkflowResult> {
   try {
     // Validate target path before any operations
@@ -73,6 +75,7 @@ export async function runGuidelinesWorkflow(
       validatedPath,
       techProfile.structure,
       techProfile,
+      logger,
       (current, total, name) => {
         if (onProgress) onProgress(`Generating ${current}/${total}: ${name}`);
       }
@@ -205,10 +208,20 @@ async function handleUpdateMode(
     type: 'guideline' as const
   }));
 
+  // Create a no-op logger for merge operations
+  const noOpLogger: ILogger = {
+    debug: () => {},
+    log: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {}
+  };
+
   // Perform merge
   const mergeResults = await batchIntelligentMerge(
     client,
     filesToMerge,
+    noOpLogger,
     (current, total, fileName) => {
       if (onProgress) onProgress(`Merging ${current}/${total}: ${fileName}`);
     }

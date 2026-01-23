@@ -13,6 +13,7 @@ import { ToolRegistry } from '../core/utils/registry.js';
 
 // Provider Services
 import { ProviderManager } from '../providers/manager.js';
+import { ProviderConfigManager } from '../providers/config-manager.js';
 
 // File System (from existing code)
 import { RealFileSystem } from '../core/io/filesystem.js';
@@ -59,7 +60,8 @@ export function createContainer(): Container {
   // Logger (constant value - already exists)
   container.bind<ILogger>(TYPES.ILogger).toConstantValue(logger);
 
-  // Provider Manager
+  // Provider Services
+  container.bind<ProviderConfigManager>(TYPES.IProviderConfigManager).to(ProviderConfigManager).inSingletonScope();
   container.bind<ProviderManager>(TYPES.IProviderManager).to(ProviderManager).inSingletonScope();
 
   // Claude Artifacts Services

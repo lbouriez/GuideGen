@@ -4,9 +4,9 @@
  */
 
 import type { IProviderClient } from '@/providers/types';
+import type { ILogger } from '../../../interfaces/services/ILogger';
 import type { PatternReport, FolderStructure, GuidelineDomain } from '@/types';
 import { toGuidelineDomain } from '@/types';
-import { logger } from '@/utils/logger';
 
 export interface GuidelineToGenerate {
   domain: GuidelineDomain;
@@ -108,8 +108,18 @@ export async function identifyGuidelinesWithAI(
   client: IProviderClient,
   patterns: PatternReport,
   techProfile: { projects?: Array<{ type: string }>; stack: { languages: string[]; frameworks: string[]; buildTools: string[] } },
-  projectStructure: FolderStructure
+  projectStructure: FolderStructure,
+  logger?: ILogger
 ): Promise<GuidelineToGenerate[]> {
+  // Create a no-op logger if none provided
+  const safeLogger = logger || {
+    warn: () => {},
+    info: () => {},
+    error: () => {},
+    debug: () => {},
+    log: () => {}
+  };
+
   try {
     // Prepare inputs
     const projectType = techProfile.projects?.[0]?.type || 'unknown';
@@ -154,15 +164,15 @@ export async function identifyGuidelinesWithAI(
     }));
 
     if (guidelines.length === 0) {
-      logger.warn('AI returned no guidelines, using fallback');
+      safeLogger.warn('AI returned no guidelines, using fallback');
       return getFallbackGuidelines(projectType);
     }
 
-    logger.info(`AI identified ${guidelines.length} guidelines: ${guidelines.map(g => g.type).join(', ')}`);
+    safeLogger.info(`AI identified ${guidelines.length} guidelines: ${guidelines.map(g => g.type).join(', ')}`);
 
     return guidelines;
   } catch (error) {
-    logger.error('Guideline identification failed, using fallback', error);
+    safeLogger.error('Guideline identification failed, using fallback', error);
     const projectType = techProfile.projects?.[0]?.type || 'unknown';
     return getFallbackGuidelines(projectType);
   }

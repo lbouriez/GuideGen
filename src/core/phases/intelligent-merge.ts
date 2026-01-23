@@ -6,8 +6,8 @@
  */
 
 import type { IProviderClient } from '../../providers/types';
+import type { ILogger } from '../../interfaces/services/ILogger';
 import { IntelligentMergeResultSchema, parseAIResponse } from '@/types';
-import { logger } from '@/utils/logger';
 
 export interface MergeChange {
   type: 'added' | 'modified' | 'removed' | 'kept';
@@ -86,7 +86,8 @@ export async function intelligentMerge(
   client: IProviderClient,
   existingContent: string,
   newContent: string,
-  contentType: 'guideline' | 'index' | 'skill' | 'agent' | 'claude-md'
+  contentType: 'guideline' | 'index' | 'skill' | 'agent' | 'claude-md',
+  logger: ILogger
 ): Promise<IntelligentMergeResult> {
   try {
     const response = await client.sendMessage(
@@ -140,6 +141,7 @@ export async function batchIntelligentMerge(
     generated: string;
     type: 'guideline' | 'index' | 'skill' | 'agent' | 'claude-md';
   }>,
+  logger: ILogger,
   onProgress?: (current: number, total: number, fileName: string) => void
 ): Promise<Map<string, IntelligentMergeResult>> {
   const results = new Map<string, IntelligentMergeResult>();
@@ -171,7 +173,8 @@ export async function batchIntelligentMerge(
       client,
       file.existing,
       file.generated,
-      file.type
+      file.type,
+      logger
     );
 
     results.set(file.fileName, mergeResult);

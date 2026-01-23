@@ -3,7 +3,8 @@
  * Coordinates provider configuration, client creation, and error recovery
  */
 
-import { injectable } from 'inversify';
+import { injectable, inject } from 'inversify';
+import { TYPES } from '../di/identifiers';
 import type { AnalysisDepth } from '../types';
 import type { IProviderClient, ProviderConfig, CompletionOptions } from './types';
 import { ProviderType } from './types';
@@ -31,7 +32,7 @@ export class ProviderManager {
   private client: IProviderClient | null = null;
 
   constructor(
-    private configManager: ProviderConfigManager = new ProviderConfigManager(),
+    @inject(TYPES.IProviderConfigManager) private configManager: ProviderConfigManager,
     private interactiveSetup: InteractiveSetup = new InteractiveSetup(),
     private clientFactory: ProviderClientFactory = new ProviderClientFactory(),
     private errorRecovery: ErrorRecoveryHandler = new ErrorRecoveryHandler(),

@@ -25,8 +25,6 @@ import {
 } from './prompts';
 import type { SelectedFiles, FileSelectionCriteria, ConcatenatedFiles } from '../../utils';
 import type { IToolRegistry } from '../../utils/registry';
-import { container } from '@/di/container';
-import { TYPES } from '@/di/identifiers';
 
 /**
  * Select files for analysis using AI-powered selection
@@ -119,10 +117,19 @@ async function analyzePatterns(
   );
 }
 
+/**
+ * Run the analysis phase
+ * @param targetPath - Path to analyze
+ * @param techProfile - Technology profile from discovery
+ * @param depth - Analysis depth
+ * @param toolRegistry - Tool registry for file operations (injected)
+ * @param debug - Enable debug output
+ */
 export async function runAnalysisPhase(
   targetPath: string,
   techProfile: TechProfile,
   depth: AnalysisDepth,
+  toolRegistry: IToolRegistry,
   debug: boolean = false
 ): Promise<PhaseResult<PatternReport>> {
   const spinner = createSpinner('Analyzing codebase with AI assistance...');
@@ -130,7 +137,6 @@ export async function runAnalysisPhase(
 
   try {
     const client = await createProviderClient(depth);
-    const toolRegistry = container.get<IToolRegistry>(TYPES.IToolRegistry);
 
     // Step 1: Select files for analysis
     spinner.text = 'Selecting most relevant files for analysis...';

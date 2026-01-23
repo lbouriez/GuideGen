@@ -5,7 +5,10 @@
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import type { IProviderClient } from '../../providers/types';
+import type { ILogger } from '../../interfaces/services/ILogger';
 import type { AnalysisDepth } from '../../types';
+import { ProviderManager } from '../../providers/manager';
+import { ClaudeArtifactsWorkflow } from '../../workflows/claude-artifacts/ClaudeArtifactsWorkflow';
 import { runDiscoveryPhase } from '../phases/discovery';
 import { runAnalysisPhase } from '../phases/analysis';
 import { runGuidelinesWorkflow, type GuidelinesWorkflowResult } from './guidelines-update';
@@ -92,6 +95,9 @@ export async function runSetupWorkflow(
   client: IProviderClient,
   targetPath: string,
   depth: AnalysisDepth = 'standard',
+  providerManager: ProviderManager,
+  logger: ILogger,
+  workflow: ClaudeArtifactsWorkflow,
   onProgress?: (message: string) => void
 ): Promise<SetupWorkflowResult> {
   const phasesCompleted: string[] = [];
@@ -122,7 +128,7 @@ export async function runSetupWorkflow(
 
     // Phase 1: Discovery
     const discoveryResult = await executePhase('Discovery', 1, 5,
-      () => runDiscoveryPhase(validatedPath, depth),
+      () => runDiscoveryPhase(validatedPath, depth, providerManager, logger),
       onProgress
     );
 
@@ -156,7 +162,7 @@ export async function runSetupWorkflow(
 
     // Phase 3: Guidelines Generation
     const guidelinesResult = await executePhase<GuidelinesWorkflowResult>('Guidelines Generation', 3, 5,
-      () => runGuidelinesWorkflow(client, validatedPath, techProfile, patterns, false, onProgress),
+      () => runGuidelinesWorkflow(client, validatedPath, techProfile, patterns, false, onProgress, logger),
       onProgress
     );
 
@@ -191,7 +197,7 @@ export async function runSetupWorkflow(
 
     // Phase 5: Claude Artifacts
     const artifactsResult = await executePhase<ClaudeArtifactsWorkflowResult>('Claude Artifacts', 5, 5,
-      () => runClaudeArtifactsWorkflow(client, validatedPath, techProfile, false, onProgress),
+      () => runClaudeArtifactsWorkflow(client, validatedPath, techProfile, workflow, false, onProgress),
       onProgress
     );
 

@@ -18,15 +18,14 @@ export { runSuggestPhase } from '../phases/suggest';
 // CLI-friendly wrapper functions
 import { resolve } from 'path';
 import type { AnalysisDepth } from '../../types';
+import type { ILogger } from '../../interfaces/services/ILogger';
 import { ProviderManager } from '../../providers/manager';
-import { container } from '../../di/container';
-import { TYPES } from '../../di/identifiers';
 import { runGuidelinesWorkflow } from './guidelines-update';
 import { runIndexesWorkflow } from './indexes-update';
 import { runClaudeArtifactsWorkflow } from './claude-update';
 import { runDiscoveryPhase } from '../phases/discovery';
 import { runAnalysisPhase } from '../phases/analysis';
-import { logger } from '@/utils/logger';
+import type { ClaudeArtifactsWorkflow } from '../../workflows/claude-artifacts/ClaudeArtifactsWorkflow.js';
 
 /**
  * Generate project-specific coding guidelines based on existing code patterns
@@ -80,13 +79,14 @@ export async function runGuidelinesGeneration(
   depth: AnalysisDepth,
   skipConfirm: boolean,
   overwrite: boolean,
+  providerManager: ProviderManager,
+  logger: ILogger,
   forceSetup: boolean = false,
   debug: boolean = false
 ): Promise<void> {
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   if (forceSetup) {
     await providerManager.forceSetup();
   }
@@ -95,7 +95,7 @@ export async function runGuidelinesGeneration(
 
   // Run discovery and analysis first
   logger.info('Running discovery...');
-  const discoveryResult = await runDiscoveryPhase(resolvedPath, depth);
+  const discoveryResult = await runDiscoveryPhase(resolvedPath, depth, providerManager, logger);
   if (!discoveryResult.success) {
     throw new Error(`Discovery failed: ${discoveryResult.error}`);
   }
@@ -114,7 +114,8 @@ export async function runGuidelinesGeneration(
     discoveryResult.data,
     analysisResult.data,
     true, // interactive=true for CLI command
-    (msg) => logger.info(msg)
+    (msg) => logger.info(msg),
+    logger
   );
 
   if (!result.success) {
@@ -161,13 +162,14 @@ export async function runIndexGeneration(
   targetPath: string,
   skipConfirm: boolean,
   overwrite: boolean,
+  providerManager: ProviderManager,
+  logger: ILogger,
   forceSetup: boolean = false,
   debug: boolean = false
 ): Promise<void> {
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   if (forceSetup) {
     await providerManager.forceSetup();
   }
@@ -176,7 +178,7 @@ export async function runIndexGeneration(
 
   // Run discovery to get tech profile
   logger.info('Running discovery...');
-  const discoveryResult = await runDiscoveryPhase(resolvedPath, 'standard');
+  const discoveryResult = await runDiscoveryPhase(resolvedPath, 'standard', providerManager, logger);
   if (!discoveryResult.success) {
     throw new Error(`Discovery failed: ${discoveryResult.error}`);
   }
@@ -250,13 +252,15 @@ export async function runClaudeGeneration(
   depth: AnalysisDepth,
   skipConfirm: boolean,
   overwrite: boolean,
+  providerManager: ProviderManager,
+  logger: ILogger,
+  workflow: ClaudeArtifactsWorkflow,
   forceSetup: boolean = false,
   debug: boolean = false
 ): Promise<void> {
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   if (forceSetup) {
     await providerManager.forceSetup();
   }
@@ -265,7 +269,7 @@ export async function runClaudeGeneration(
 
   // Run discovery to get tech profile
   logger.info('Running discovery...');
-  const discoveryResult = await runDiscoveryPhase(resolvedPath, depth);
+  const discoveryResult = await runDiscoveryPhase(resolvedPath, depth, providerManager, logger);
   if (!discoveryResult.success) {
     throw new Error(`Discovery failed: ${discoveryResult.error}`);
   }
@@ -276,6 +280,7 @@ export async function runClaudeGeneration(
     client,
     resolvedPath,
     discoveryResult.data,
+    workflow,
     true, // interactive=true for CLI command
     (msg) => logger.info(msg)
   );

@@ -3,7 +3,7 @@
  * Phase 4: Generate CLAUDE.md, guidelines, skills, and agents
  */
 
-import { logger } from '@/utils/logger';
+import type { ILogger } from '../../../interfaces/services/ILogger';
 
 interface ParsedRule {
   title: string;
@@ -218,7 +218,8 @@ Return ONLY the markdown content.`;
 export const GUIDELINE_USER_PROMPT = (
   domain: string,
   patterns: string,
-  rules: string
+  rules: string,
+  logger?: ILogger
 ): string => {
   let patternsData: Record<string, ParsedPattern> = {};
   let rulesData: ParsedRule[] = [];
@@ -227,14 +228,18 @@ export const GUIDELINE_USER_PROMPT = (
   try {
     patternsData = JSON.parse(patterns || '{}') as Record<string, ParsedPattern>;
   } catch (error) {
-    logger.warn(`Failed to parse patterns for domain ${domain}`, error);
+    if (logger) {
+      logger.warn(`Failed to parse patterns for domain ${domain}`, error);
+    }
   }
 
   // Safely parse rules with error handling
   try {
     rulesData = JSON.parse(rules || '[]') as ParsedRule[];
   } catch (error) {
-    logger.warn(`Failed to parse rules for domain ${domain}`, error);
+    if (logger) {
+      logger.warn(`Failed to parse rules for domain ${domain}`, error);
+    }
   }
 
   const hasPatterns = Object.keys(patternsData).length > 0;

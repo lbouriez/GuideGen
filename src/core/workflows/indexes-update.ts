@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { IProviderClient } from '../../providers/types';
 import type { TechProfile, GeneratedGuideline } from '../../types';
+import type { ILogger } from '../../interfaces/services/ILogger';
 import { toGuidelineDomain } from '../../types';
 import { generateAllIndexes, type GeneratedIndex } from '../phases/indexes/generator';
 import { validateAllIndexes } from '../phases/indexes/cross-ref';
@@ -225,6 +226,7 @@ export async function runIndexesWorkflow(
       techProfile,
       existingGuidelines,
       targetPath,
+      undefined,
       (current: number, total: number, name: string) => {
         if (onProgress) {
           onProgress(`Generating index ${current}/${total}: ${name}`);
@@ -275,9 +277,19 @@ export async function runIndexesWorkflow(
         };
       });
 
+      // Create a no-op logger for merge operations
+      const noOpLogger: ILogger = {
+        debug: () => {},
+        log: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {}
+      };
+
       const mergeResults = await batchIntelligentMerge(
         client,
         filesToMerge,
+        noOpLogger,
         (current, total, fileName) => {
           if (onProgress) {
             onProgress(`Merging ${current}/${total}: ${fileName}`);

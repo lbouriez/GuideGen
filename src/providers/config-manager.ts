@@ -3,18 +3,26 @@
  * Handles loading and saving provider configuration
  */
 
+import { injectable, inject } from 'inversify';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
+import { TYPES } from '@/di/identifiers';
+import type { ILogger } from '../interfaces/services/ILogger';
 import type { ProviderConfig } from './types';
 import { ProviderType, DEFAULT_MODELS } from './types';
-import { logger } from '@/utils/logger';
 import { printWarning } from '@/utils/display';
 
+@injectable()
 export class ProviderConfigManager {
   private readonly envPath: string;
   private readonly projectRoot: string;
+  private readonly logger: ILogger;
 
-  constructor(envPath?: string) {
+  constructor(
+    @inject(TYPES.ILogger) logger: ILogger,
+    envPath?: string
+  ) {
+    this.logger = logger;
     this.envPath = envPath || join(process.cwd(), '.env');
     this.projectRoot = dirname(this.envPath);
   }
@@ -152,7 +160,7 @@ export class ProviderConfigManager {
       const envMap = this.parseEnvFile(envContent);
       return this.buildConfigFromEnvMap(envMap);
     } catch (error) {
-      logger.error('Failed to parse .env file', error);
+      this.logger.error('Failed to parse .env file', error);
       return null;
     }
   }

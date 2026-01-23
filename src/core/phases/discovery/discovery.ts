@@ -6,9 +6,8 @@
 import { join } from 'path';
 import inquirer from 'inquirer';
 import type { TechProfile, PhaseResult, AnalysisDepth, FolderStructure } from '@/types';
+import type { ILogger } from '../../../interfaces/services/ILogger';
 import { createProviderClient, ProviderManager } from '@/providers/manager';
-import { container } from '@/di/container';
-import { TYPES } from '@/di/identifiers';
 import {
   getFolderStructure,
   readFileSafe,
@@ -45,8 +44,7 @@ async function readConfigFiles(
 /**
  * Get the display name for the current AI provider
  */
-function getProviderDisplayName(): string {
-  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
+function getProviderDisplayName(providerManager: ProviderManager): string {
   const currentProvider = providerManager.getCurrentProvider();
   return currentProvider === 'anthropic' ? 'Claude' :
          currentProvider === 'groq' ? 'Groq' : 'AI';
@@ -85,7 +83,7 @@ function printDiscoverySummary(techProfile: TechProfile): void {
 /**
  * Handle project exclusions for monorepos
  */
-async function handleProjectExclusions(techProfile: TechProfile): Promise<void> {
+async function handleProjectExclusions(techProfile: TechProfile, providerManager: ProviderManager): Promise<void> {
   if (!techProfile.projects || techProfile.projects.length === 0) {
     return;
   }
@@ -95,7 +93,6 @@ async function handleProjectExclusions(techProfile: TechProfile): Promise<void> 
     printInfo(`  - ${p.name} (${p.type}) at ${p.path}`);
   });
 
-  const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
   const exclusionsConfigured = providerManager.hasConfiguredExclusions();
 
   if (!exclusionsConfigured) {
@@ -142,6 +139,8 @@ async function handleProjectExclusions(techProfile: TechProfile): Promise<void> 
 export async function runDiscoveryPhase(
   targetPath: string,
   depth: AnalysisDepth,
+  providerManager: ProviderManager,
+  logger: ILogger,
   debug: boolean = false
 ): Promise<PhaseResult<TechProfile>> {
   const spinner = createSpinner('Analyzing project structure...');
@@ -164,7 +163,7 @@ export async function runDiscoveryPhase(
     const folderTree = createFolderTree(structure.directories);
 
     // Get provider name for display
-    const providerName = getProviderDisplayName();
+    const providerName = getProviderDisplayName(providerManager);
     spinner.text = `Analyzing tech stack with ${providerName}...`;
 
     // Use AI provider to analyze
@@ -181,7 +180,7 @@ export async function runDiscoveryPhase(
 
     // Print summary and handle exclusions
     printDiscoverySummary(techProfile);
-    await handleProjectExclusions(techProfile);
+    await handleProjectExclusions(techProfile, providerManager);
 
     return {
       success: true,

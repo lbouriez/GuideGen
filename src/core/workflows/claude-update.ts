@@ -3,8 +3,6 @@
  * Thin wrapper around ClaudeArtifactsWorkflow for backwards compatibility
  */
 
-import { container } from '../../di/container.js';
-import { TYPES } from '../../di/identifiers.js';
 import type { IProviderClient } from '../../providers/types.js';
 import type { TechProfile } from '../../types/index.js';
 import type { ClaudeArtifactsWorkflow } from '../../workflows/claude-artifacts/ClaudeArtifactsWorkflow.js';
@@ -76,9 +74,9 @@ export async function runClaudeArtifactsWorkflow(
   client: IProviderClient,
   targetPath: string,
   techProfile: TechProfile,
+  workflow: ClaudeArtifactsWorkflow,
   interactive: boolean = true,
   onProgress?: (message: string) => void
 ): Promise<ClaudeArtifactsWorkflowResult> {
-  const workflow = container.get<ClaudeArtifactsWorkflow>(TYPES.IClaudeWorkflow);
   return workflow.execute(client, targetPath, techProfile, interactive, onProgress);
 }

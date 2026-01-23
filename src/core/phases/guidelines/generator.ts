@@ -3,6 +3,7 @@
  */
 
 import type { IProviderClient } from '@/providers/types';
+import type { ILogger } from '../../../interfaces/services/ILogger';
 import type { PatternReport, GeneratedGuideline, FolderStructure, TechProfile } from '@/types';
 import { GUIDELINE_SYSTEM_PROMPT, GUIDELINE_USER_PROMPT } from './prompts';
 import { selectAndReadFiles } from './file-selector';
@@ -211,6 +212,7 @@ export async function generateAllGuidelines(
   targetPath: string,
   projectStructure: FolderStructure,
   techProfile: TechProfile,
+  logger?: ILogger,
   onProgress?: (current: number, total: number, guideline: string) => void
 ): Promise<GeneratedGuideline[]> {
   // Use AI to identify which guidelines to create based on actual codebase
@@ -222,7 +224,8 @@ export async function generateAllGuidelines(
     client,
     patterns,
     techProfile,
-    projectStructure
+    projectStructure,
+    logger
   );
 
   const results: GeneratedGuideline[] = [];

@@ -59,6 +59,7 @@ export class ArtifactMergerService {
       const mergeResults = await batchIntelligentMerge(
         client,
         itemsToMerge,
+        this.logger,
         onProgress
       );
 

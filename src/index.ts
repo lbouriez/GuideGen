@@ -30,6 +30,8 @@ import {
 import { ProviderManager } from './providers/manager';
 import { container } from './di/container';
 import { TYPES } from './di/identifiers';
+import type { ILogger } from './interfaces/services/ILogger';
+import type { ClaudeArtifactsWorkflow } from './workflows/claude-artifacts/ClaudeArtifactsWorkflow';
 import { generateAnalysisReport } from './core/phases/analysis-report';
 import { getErrorMessage } from './core/utils/errors';
 import { TargetPathSchema, AnalysisDepthSchema } from './validation/schemas';
@@ -146,7 +148,9 @@ program
     try {
       const validatedPath = validateTargetPath(inputPath);
       const validatedDepth = validateDepth(options.depth);
-      await runGuidelinesGeneration(validatedPath, validatedDepth, false, false, options.forceSetup, false);
+      const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
+      const logger = container.get<ILogger>(TYPES.ILogger);
+      await runGuidelinesGeneration(validatedPath, validatedDepth, false, false, providerManager, logger, options.forceSetup, false);
       printSuccess('✓ Guidelines generation complete!');
     } catch (error: unknown) {
       if (error instanceof ValidationError) {
@@ -166,7 +170,9 @@ program
   .action(async (inputPath: string, options: { forceSetup: boolean }) => {
     try {
       const validatedPath = validateTargetPath(inputPath);
-      await runIndexGeneration(validatedPath, false, false, options.forceSetup, false);
+      const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
+      const logger = container.get<ILogger>(TYPES.ILogger);
+      await runIndexGeneration(validatedPath, false, false, providerManager, logger, options.forceSetup, false);
       printSuccess('✓ Index generation complete!');
     } catch (error: unknown) {
       if (error instanceof ValidationError) {
@@ -188,7 +194,10 @@ program
     try {
       const validatedPath = validateTargetPath(inputPath);
       const validatedDepth = validateDepth(options.depth);
-      await runClaudeGeneration(validatedPath, validatedDepth, false, false, options.forceSetup, false);
+      const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
+      const logger = container.get<ILogger>(TYPES.ILogger);
+      const workflow = container.get<ClaudeArtifactsWorkflow>(TYPES.IClaudeWorkflow);
+      await runClaudeGeneration(validatedPath, validatedDepth, false, false, providerManager, logger, workflow, options.forceSetup, false);
       printSuccess('✓ Claude artifacts generation complete!');
     } catch (error: unknown) {
       if (error instanceof ValidationError) {
@@ -223,11 +232,18 @@ async function runSetup(
     printSuccess('AI provider ready');
     printDivider();
 
+    // Get dependencies from container
+    const logger = container.get<ILogger>(TYPES.ILogger);
+    const workflow = container.get<ClaudeArtifactsWorkflow>(TYPES.IClaudeWorkflow);
+
     // Run full setup workflow
     const result = await runSetupWorkflow(
       client,
       resolvedPath,
       depth,
+      providerManager,
+      logger,
+      workflow,
       (msg) => printInfo(msg)
     );
 
@@ -267,9 +283,12 @@ async function runAnalyze(
       await providerManager.forceSetup();
     }
 
+    // Get dependencies from container
+    const logger = container.get<ILogger>(TYPES.ILogger);
+
     // Phase 1: Discovery
     printPhase(1, 'Discovery');
-    const discoveryResult = await runDiscoveryPhase(resolvedPath, depth);
+    const discoveryResult = await runDiscoveryPhase(resolvedPath, depth, providerManager, logger);
 
     if (!discoveryResult.success) {
       printError(`Discovery failed: ${discoveryResult.error}`);
@@ -281,7 +300,7 @@ async function runAnalyze(
 
     // Phase 2: Analysis
     printPhase(2, 'Pattern Analysis');
-    const analysisResult = await runAnalysisPhase(resolvedPath, discoveryResult.data, depth);
+    const analysisResult = await runAnalysisPhase(resolvedPath, discoveryResult.data, depth, false);
 
     if (!analysisResult.success) {
       printError(`Analysis failed: ${analysisResult.error}`);

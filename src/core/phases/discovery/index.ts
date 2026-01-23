@@ -5,9 +5,8 @@
 
 import { join } from 'path';
 import type { TechProfile, PhaseResult, AnalysisDepth } from '@/types';
+import type { ILogger } from '../../../interfaces/services/ILogger';
 import { createProviderClient, ProviderManager } from '@/providers/manager';
-import { container } from '@/di/container';
-import { TYPES } from '@/di/identifiers';
 import { readFileSafe } from '../../utils/file-io';
 import { getFolderStructure, createFolderTree } from '../../utils/structure';
 import { analyzeTechStack } from './analyzer';
@@ -74,6 +73,8 @@ import {
 export async function runDiscoveryPhase(
   targetPath: string,
   depth: AnalysisDepth,
+  providerManager: ProviderManager,
+  logger: ILogger,
   debug: boolean = false
 ): Promise<PhaseResult<TechProfile>> {
   const spinner = createSpinner('Analyzing project structure...');
@@ -95,7 +96,7 @@ export async function runDiscoveryPhase(
     // Read essential config files only
     const configContents: Array<{ path: string; content: string }> = [];
     const essentialConfigs = structure.configFiles.slice(0, 10); // Limit to first 10
-    
+
     for (const configFile of essentialConfigs) {
       const content = await readFileSafe(join(targetPath, configFile));
       if (content) {
@@ -107,7 +108,6 @@ export async function runDiscoveryPhase(
     const folderTree = createFolderTree(structure.directories);
 
     // Get provider name for display
-    const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
     const currentProvider = providerManager.getCurrentProvider();
     const providerName = currentProvider === 'anthropic' ? 'Claude' :
                         currentProvider === 'groq' ? 'Groq' : 'AI';

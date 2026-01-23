@@ -36,6 +36,7 @@ export async function runIndexesPhase(
       techProfile,
       guidelines,
       targetPath,
+      undefined,
       (current, total, name) => {
         if (onProgress) {
           onProgress(`Generating index ${current}/${total}: ${name}`);
