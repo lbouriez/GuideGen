@@ -39,10 +39,15 @@ PROVIDE CONCRETE, PROJECT-SPECIFIC DOCUMENTATION:
 
 Use this structure for every guideline:
 
+---
+title: [Clear, Concise Title]
+description: [One-sentence description of what this guideline covers]
+---
+
 # [Domain] - [Concept]
 
 > **1-2 sentence summary**
-> 
+>
 > Detailed context about why this exists and when to use it.
 
 ---
@@ -105,6 +110,28 @@ export function GUIDELINE_USER_PROMPT(
 
 **Domain**: ${domain}
 **Guideline Type**: ${guidelineType}
+
+## CRITICAL - Frontmatter Requirement
+
+**Your guideline MUST start with YAML frontmatter**:
+
+\`\`\`yaml
+---
+title: Clear, Concise Title (e.g., "Error Handling Patterns", "TypeScript Import Conventions")
+description: One-sentence summary of what this guideline covers
+---
+\`\`\`
+
+**Examples**:
+- Title: "Error Handling Patterns" | Description: "Try-catch patterns and custom error classes for backend error handling"
+- Title: "Dependency Injection" | Description: "Inversify container configuration and service registration patterns"
+- Title: "Vitest Testing Patterns" | Description: "Test organization, mocking strategies, and assertion patterns using Vitest"
+
+**Rules for Frontmatter**:
+1. **Title**: Human-readable, describes the topic (not just "${guidelineType}")
+2. **Description**: One complete sentence, explains what the guideline covers
+3. **Format**: Valid YAML with three dashes before and after
+4. **Placement**: Must be THE VERY FIRST THING in the file (before heading)
 
 ## Detected Tech Stack
 

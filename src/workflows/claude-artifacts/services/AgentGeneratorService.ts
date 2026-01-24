@@ -8,7 +8,7 @@ import { TYPES } from '../../../di/identifiers.js';
 import type { ILogger } from '../../../interfaces/services/ILogger.js';
 import type { IProviderClient } from '../../../providers/types.js';
 import type { GeneratedGuideline, ExtractedRule, TechProfile } from '../../../types/index.js';
-import { generateAllAgents, type GeneratedAgent } from '../../../core/phases/claude-artifacts/agents.js';
+import { generateAllAgentsV2, type GeneratedAgent } from '../../../core/phases/claude-artifacts/agents-v2.js';
 import { validateAllAgents } from '../../../core/phases/claude-artifacts/validator.js';
 
 export interface AgentGenerationResult {
@@ -26,7 +26,7 @@ export class AgentGeneratorService {
   ) {}
 
   /**
-   * Generate agents from rules and guidelines
+   * Generate agents from guidelines using improved V2 approach
    */
   async generate(
     client: IProviderClient,
@@ -36,13 +36,11 @@ export class AgentGeneratorService {
     onProgress?: (current: number, total: number, name: string) => void
   ): Promise<AgentGenerationResult> {
     try {
-      this.logger.info('Starting agent generation');
+      this.logger.info('Starting agent generation (V2 - AI-guided selection)');
 
-      const agents = await generateAllAgents(
+      const agents = await generateAllAgentsV2(
         client,
-        rules,
         guidelines,
-        techProfile,
         this.maxAgents,
         onProgress
       );

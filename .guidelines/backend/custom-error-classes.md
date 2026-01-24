@@ -1,99 +1,76 @@
+---
+title: Custom Error Classes in Backend
+description: Standardized error types for consistent error handling in the backend.
+---
+
 # Backend - Custom Error Classes
 
-> **Summary**: The codebase utilizes custom error classes for standardized error handling, ensuring consistency across the application. These classes extend the base `Error` class and provide additional properties for better error management.
-> 
-> Detailed context about why this exists and when to use it: Custom error classes are essential in the codebase for handling specific error scenarios, such as validation errors, file operation errors, and provider errors. They allow for more informative error messages and easier error handling.
-
----
+> Custom error classes are used throughout the backend to handle and propagate errors in a standardized manner.
+> These classes provide a way to categorize and describe errors, making it easier to handle and log them.
 
 ## When to Use This Guide
 
 Use this guide when:
-- Implementing error handling mechanisms in the backend
-- Creating custom error classes for specific error scenarios
-- Extending the base `Error` class for additional error properties
-
----
+- You need to handle errors in a backend service or module.
+- You want to create a custom error class for a specific error type.
+- You need to understand how to use existing custom error classes in the codebase.
 
 ## Overview
 
-The codebase includes several custom error classes, each designed to handle specific types of errors. These classes inherit from the base `Error` class and provide additional properties to facilitate better error management. The custom error classes include:
-- `GuideGenError`: The base error class for all custom errors, providing a `code` property and a `timestamp` property.
-- `ValidationError`: Extends `GuideGenError` and includes properties for validation error details, such as `details` and `field`.
-- `FileOperationError`: Extends `GuideGenError` and includes properties for file operation errors, such as `filePath` and `operation`.
-- `ProviderError`: Extends `GuideGenError` and includes properties for provider errors, such as `provider` and `statusCode`.
-- `PhaseExecutionError`: Extends `GuideGenError` and includes properties for phase execution errors, such as `phase` and `recoverable`.
-- `ConfigurationError`: Extends `GuideGenError` and includes properties for configuration errors, such as `configKey` and `expectedType`.
-- `RateLimitError`: Extends `GuideGenError` and includes properties for rate limit errors, such as `retryAfter`.
-- `PathTraversalError`: Extends `GuideGenError` and includes properties for path traversal errors, such as `requestedPath` and `basePath`.
+The backend codebase uses a set of custom error classes to handle different types of errors. These classes are designed to provide a standardized way of handling and propagating errors throughout the application.
 
-These custom error classes are used throughout the codebase to handle specific error scenarios and provide more informative error messages.
+The custom error classes are defined in the `src/errors/index.ts` file and include classes such as `GuideGenError`, `ValidationError`, `FileOperationError`, `ProviderError`, `PhaseExecutionError`, `ConfigurationError`, `RateLimitError`, and `PathTraversalError`.
 
----
+Each custom error class has its own set of properties and methods that provide additional information about the error. For example, the `ValidationError` class has a `details` property that contains information about the validation error.
 
 ## Key Rules
 
 ### ✅ DO
 
-- ✅ **Extend the base `Error` class**: When creating a custom error class, extend the base `Error` class to inherit its properties and methods.
+- ✅ **Use custom error classes to handle specific error types**:
   ```typescript
-  export abstract class GuideGenError extends Error {
-    // ...
-  }
+  // Good example
+  throw new ValidationError('Invalid input data', { field: 'username', value: 'invalid' });
   ```
-- ✅ **Provide additional properties**: Include additional properties in the custom error class to provide more context about the error.
+- ✅ **Extend the `GuideGenError` class to create custom error classes**:
   ```typescript
-  export class ValidationError extends GuideGenError {
-    public readonly details?: Record<string, unknown>;
-    public readonly field?: string;
-    // ...
-  }
-  ```
-- ✅ **Use the `toJSON()` method**: Implement the `toJSON()` method to return a JSON representation of the error object.
-  ```typescript
-  toJSON(): Record<string, unknown> {
-    return {
-      name: this.name,
-      message: this.message,
-      code: this.code,
-      timestamp: this.timestamp.toISOString(),
-      stack: this.stack,
-    };
+  // Good example
+  export class CustomError extends GuideGenError {
+    constructor(message: string) {
+      super(message, 'CUSTOM_ERROR');
+    }
   }
   ```
 
 ### ❌ NEVER
 
-- ❌ **Do not use generic error messages**: Avoid using generic error messages that do not provide any context about the error.
+- ❌ **Use generic error classes or throw plain error messages**:
   ```typescript
-  // ❌ Bad
+  // Bad example
   throw new Error('Something went wrong');
   ```
   ```typescript
-  // ✅ Good
-  throw new ValidationError('Invalid input data', { field: 'username' });
+  // Good alternative
+  throw new GuideGenError('Something went wrong', 'GENERIC_ERROR');
   ```
-
----
 
 ## Complete Example
 
-Here is an example of how to use the custom error classes in the codebase:
+Here is an example of how to use the `ValidationError` class to handle a validation error:
 ```typescript
+// Example usage of ValidationError
 try {
-  // Code that may throw an error
-  const fileService = new GuidelineFileService();
-  fileService.writeAll(targetPath, guidelines);
+  // Validate user input
+  if (!username || !password) {
+    throw new ValidationError('Invalid input data', { field: 'username', value: 'invalid' });
+  }
 } catch (error) {
   if (error instanceof ValidationError) {
     console.error(`Validation error: ${error.message}`);
     console.error(`Details: ${JSON.stringify(error.details)}`);
-  } else if (error instanceof FileOperationError) {
-    console.error(`File operation error: ${error.message}`);
-    console.error(`File path: ${error.filePath}`);
   } else {
     console.error(`Unknown error: ${error.message}`);
   }
 }
 ```
-In this example, we catch any errors that occur during the execution of the code and check if they are instances of the custom error classes. If they are, we log the error message and any additional properties provided by the custom error class.
+Note that this example uses the `ValidationError` class to handle a validation error and provides additional information about the error using the `details` property.

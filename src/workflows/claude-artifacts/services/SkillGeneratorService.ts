@@ -8,7 +8,7 @@ import { TYPES } from '../../../di/identifiers.js';
 import type { ILogger } from '../../../interfaces/services/ILogger.js';
 import type { IProviderClient } from '../../../providers/types.js';
 import type { GeneratedGuideline, ExtractedRule } from '../../../types/index.js';
-import { generateAllSkills, type GeneratedSkill } from '../../../core/phases/claude-artifacts/skills.js';
+import { generateAllSkillsV2, type GeneratedSkill } from '../../../core/phases/claude-artifacts/skills-v2.js';
 import { validateAllSkills } from '../../../core/phases/claude-artifacts/validator.js';
 
 export interface SkillGenerationResult {
@@ -26,7 +26,7 @@ export class SkillGeneratorService {
   ) {}
 
   /**
-   * Generate skills from rules and guidelines
+   * Generate skills from guidelines using improved V2 approach
    */
   async generate(
     client: IProviderClient,
@@ -35,11 +35,10 @@ export class SkillGeneratorService {
     onProgress?: (current: number, total: number, name: string) => void
   ): Promise<SkillGenerationResult> {
     try {
-      this.logger.info('Starting skill generation');
+      this.logger.info('Starting skill generation (V2 - AI-guided selection)');
 
-      const skills = await generateAllSkills(
+      const skills = await generateAllSkillsV2(
         client,
-        rules,
         guidelines,
         this.maxSkills,
         onProgress

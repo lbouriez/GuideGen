@@ -6,12 +6,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { IProviderClient } from '../../providers/types';
 import type { TechProfile, GeneratedGuideline } from '../../types';
-import type { ILogger } from '../../interfaces/services/ILogger';
 import { toGuidelineDomain } from '../../types';
 import { generateAllIndexes, type GeneratedIndex } from '../phases/indexes/generator';
 import { validateAllIndexes } from '../phases/indexes/cross-ref';
-import { batchIntelligentMerge, formatChanges } from '../phases/intelligent-merge';
-import { promptUpdateMode, confirmChanges } from '../../utils/interactive';
+import { promptUpdateMode } from '../../utils/interactive';
 import { printSuccess } from '../../utils/display';
 
 export interface IndexesWorkflowResult {
@@ -67,37 +65,6 @@ function deleteIndexes(targetPath: string): void {
       }
     }
   }
-}
-
-/**
- * Read existing indexes from disk
- */
-function readExistingIndexes(targetPath: string): Map<string, string> {
-  const existing = new Map<string, string>();
-  const guidelinesPath = path.join(targetPath, '.guidelines');
-
-  if (!fs.existsSync(guidelinesPath)) {
-    return existing;
-  }
-
-  // Read root index
-  const rootIndexPath = path.join(guidelinesPath, 'index.md');
-  if (fs.existsSync(rootIndexPath)) {
-    existing.set('index.md', fs.readFileSync(rootIndexPath, 'utf-8'));
-  }
-
-  // Read domain indexes
-  const domains = fs.readdirSync(guidelinesPath, { withFileTypes: true })
-    .filter(d => d.isDirectory());
-
-  for (const domain of domains) {
-    const indexPath = path.join(guidelinesPath, domain.name, `${domain.name}-index.md`);
-    if (fs.existsSync(indexPath)) {
-      existing.set(`${domain.name}/${domain.name}-index.md`, fs.readFileSync(indexPath, 'utf-8'));
-    }
-  }
-
-  return existing;
 }
 
 /**
@@ -260,74 +227,16 @@ export async function runIndexesWorkflow(
       };
     }
 
-    // If update mode, do intelligent merge
+    // If update mode, regenerate indexes (simpler than merging since indexes are auto-generated)
     if (updateMode === 'update') {
-      if (onProgress) onProgress('Reading existing indexes...');
-      const existingIndexes = readExistingIndexes(targetPath);
+      if (onProgress) onProgress('Regenerating indexes...');
 
-      if (onProgress) onProgress('Intelligently merging indexes...');
+      // Delete old indexes
+      deleteIndexes(targetPath);
 
-      const filesToMerge = indexes.map(idx => {
-        const fileName = idx.type === 'root' ? idx.fileName : `${idx.domain}/${idx.fileName}`;
-        return {
-          fileName,
-          existing: existingIndexes.get(fileName) || null,
-          generated: idx.content,
-          type: 'index' as const
-        };
-      });
-
-      // Create a no-op logger for merge operations
-      const noOpLogger: ILogger = {
-        debug: () => {},
-        log: () => {},
-        info: () => {},
-        warn: () => {},
-        error: () => {}
-      };
-
-      const mergeResults = await batchIntelligentMerge(
-        client,
-        filesToMerge,
-        noOpLogger,
-        (current, total, fileName) => {
-          if (onProgress) {
-            onProgress(`Merging ${current}/${total}: ${fileName}`);
-          }
-        }
-      );
-
-      // Build change summary
-      const changesSummary: string[] = [];
-      for (const [fileName, result] of mergeResults) {
-        changesSummary.push(`\n${fileName}:`);
-        changesSummary.push(formatChanges(result.changes));
-      }
-
-      // Show dry-run preview
-      if (interactive) {
-        const confirmed = await confirmChanges(
-          changesSummary.join('\n'),
-          mergeResults.size
-        );
-
-        if (!confirmed) {
-          return {
-            success: true,
-            indexesGenerated: 0,
-            mode: 'cancelled'
-          };
-        }
-      }
-
-      // Write merged content
+      // Write new indexes directly
       if (onProgress) onProgress('Writing updated indexes...');
-      const mergedContent = new Map<string, string>();
-      for (const [fileName, result] of mergeResults) {
-        mergedContent.set(fileName, result.mergedContent);
-      }
-
-      writeIndexes(targetPath, indexes, mergedContent);
+      writeIndexes(targetPath, indexes);
 
       printSuccess(`\n✓ Indexes updated: ${indexes.length} files`);
 

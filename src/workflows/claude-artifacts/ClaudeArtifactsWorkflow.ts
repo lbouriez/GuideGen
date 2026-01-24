@@ -18,6 +18,8 @@ import { AgentGeneratorService } from './services/AgentGeneratorService.js';
 import { ClaudeMdGeneratorService } from './services/ClaudeMdGeneratorService.js';
 import { ArtifactMergerService } from './services/ArtifactMergerService.js';
 import { GuidelineExtractor } from './services/GuidelineExtractor.js';
+import { extractAllArtifactMetadata } from '../../core/workflows/services/frontmatter-parser.js';
+import { matchArtifactsWithAI } from '../../core/workflows/services/artifact-matcher.js';
 import {
   createDefaultTechStackSkillRegistry,
   TechStackSkillOrchestrator,
@@ -314,6 +316,31 @@ export class ClaudeArtifactsWorkflow {
     this.progress(onProgress, 'Reading existing artifacts...');
     const existing = this.fileManager.readExistingArtifacts(targetPath);
 
+    // Extract metadata from existing skills and agents
+    this.progress(onProgress, 'Extracting metadata from existing artifacts...');
+    const existingSkillsMeta = extractAllArtifactMetadata(existing.skills);
+    const existingAgentsMeta = extractAllArtifactMetadata(existing.agents);
+    this.logger.info(`Found ${existingSkillsMeta.length} existing skills and ${existingAgentsMeta.length} existing agents with metadata`);
+
+    // Use AI to match skills and agents
+    this.progress(onProgress, 'Matching skills with AI...');
+    const skillMatchDecisions = await matchArtifactsWithAI(
+      existingSkillsMeta,
+      skills.map(s => s.name),
+      'skill',
+      client,
+      this.logger
+    );
+
+    this.progress(onProgress, 'Matching agents with AI...');
+    const agentMatchDecisions = await matchArtifactsWithAI(
+      existingAgentsMeta,
+      agents.map(a => a.name),
+      'agent',
+      client,
+      this.logger
+    );
+
     this.progress(onProgress, 'Intelligently merging artifacts...');
     const mergeResult = await this.merger.merge(
       client,
@@ -323,7 +350,9 @@ export class ClaudeArtifactsWorkflow {
       existing,
       (current, total, fileName) => {
         this.progress(onProgress, `Merging ${current}/${total}: ${fileName}`);
-      }
+      },
+      skillMatchDecisions,
+      agentMatchDecisions
     );
 
     if (!mergeResult.success) {

@@ -11,6 +11,7 @@ import type { GeneratedSkill } from '../../../core/phases/claude-artifacts/skill
 import type { GeneratedAgent } from '../../../core/phases/claude-artifacts/agents.js';
 import { batchIntelligentMerge, formatChanges, type MergeChange } from '../../../core/phases/intelligent-merge.js';
 import type { ExistingArtifacts, MergedContent } from './ArtifactFileManager.js';
+import type { ArtifactMatchDecision } from '../../../core/workflows/services/artifact-matcher.js';
 
 export interface MergeItem {
   fileName: string;
@@ -42,7 +43,9 @@ export class ArtifactMergerService {
     agents: GeneratedAgent[],
     claudeMdContent: string,
     existing: ExistingArtifacts,
-    onProgress?: (current: number, total: number, fileName: string) => void
+    onProgress?: (current: number, total: number, fileName: string) => void,
+    skillMatchDecisions?: Map<string, ArtifactMatchDecision>,
+    agentMatchDecisions?: Map<string, ArtifactMatchDecision>
   ): Promise<MergeResult> {
     try {
       this.logger.info('Starting artifact merge');
@@ -52,7 +55,9 @@ export class ArtifactMergerService {
         skills,
         agents,
         claudeMdContent,
-        existing
+        existing,
+        skillMatchDecisions,
+        agentMatchDecisions
       );
 
       // Perform batch intelligent merge
@@ -98,15 +103,26 @@ export class ArtifactMergerService {
     skills: GeneratedSkill[],
     agents: GeneratedAgent[],
     claudeMdContent: string,
-    existing: ExistingArtifacts
+    existing: ExistingArtifacts,
+    skillMatchDecisions?: Map<string, ArtifactMatchDecision>,
+    agentMatchDecisions?: Map<string, ArtifactMatchDecision>
   ): MergeItem[] {
     const items: MergeItem[] = [];
 
     // Skills
     for (const skill of skills) {
+      const decision = skillMatchDecisions?.get(skill.name);
+      const existingContent = decision?.existingFileName
+        ? existing.skills.get(decision.existingFileName)
+        : existing.skills.get(skill.fileName);
+
+      if (decision?.action === 'update') {
+        this.logger.info(`Matched skill ${skill.name} → ${decision.existingFileName} (${decision.reason})`);
+      }
+
       items.push({
         fileName: skill.fileName,
-        existing: existing.skills.get(skill.fileName) || null,
+        existing: existingContent || null,
         generated: skill.content,
         type: 'skill'
       });
@@ -114,9 +130,18 @@ export class ArtifactMergerService {
 
     // Agents
     for (const agent of agents) {
+      const decision = agentMatchDecisions?.get(agent.name);
+      const existingContent = decision?.existingFileName
+        ? existing.agents.get(decision.existingFileName)
+        : existing.agents.get(agent.fileName);
+
+      if (decision?.action === 'update') {
+        this.logger.info(`Matched agent ${agent.name} → ${decision.existingFileName} (${decision.reason})`);
+      }
+
       items.push({
         fileName: agent.fileName,
-        existing: existing.agents.get(agent.fileName) || null,
+        existing: existingContent || null,
         generated: agent.content,
         type: 'agent'
       });

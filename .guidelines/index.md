@@ -2,54 +2,54 @@
 > Comprehensive development guidelines for GuideGen, an AI-powered guideline generator that analyzes your codebase and generates intelligent documentation, Claude Code skills, and enforcement agents.
 
 ## Quick Start
-1. Review [Critical Rules](#critical-rules) for cross-cutting guidelines.
+**New to GuideGen?** Start here:
+1. Review [Critical Rules](#critical-rules) for essential guidelines.
 2. Explore domain-specific guidelines for your work area:
    - [All Index](./all/all-index.md) for general guidelines.
    - [Backend Index](./backend/backend-index.md) for backend development.
-3. Familiarize yourself with the project structure and available commands.
+3. Refer to the [Project README](../README.md) for full project documentation.
 
 ## Available Commands
 ### Development
 - `npm run build` - Compile TypeScript code.
 - `npm run build:exe` - Package the application for distribution.
-- `npm run dev` - Start the development server.
+- `npm run dev` - Run the application in development mode.
 - `npm run setup` - Initialize the project setup.
-- `npm run analyze` - Run code analysis.
+- `npm run analyze` - Analyze the codebase.
 - `npm run guidelines` - Generate guidelines.
 - `npm run indexes` - Generate indexes.
-- `npm run claude` - Run Claude-related commands.
+- `npm run claude` - Generate Claude Code skills.
+
 ### Testing
-- `npm run test` - Run Vitest tests.
+- `npm run test` - Run unit tests and integration tests using Vitest.
 
 ## Critical Rules
-- ✅ **Use `console.log` for logging purposes**.
-- ❌ **Do not use other logging libraries or frameworks**.
-- ✅ **Use path aliases for imports starting with `@/`**.
-- ✅ **Use relative imports for local dependencies**.
-- ❌ **Do not use `require()` for imports**.
-- ✅ **Use Vitest for testing**: The codebase uses Vitest for all testing needs. Ensure that all new tests are written using Vitest.
-- ✅ **Write descriptive test names**: Test names should clearly describe the scenario being tested.
-- ❌ **Use Jest or other testing frameworks**: The codebase is set up to use Vitest. Avoid introducing other testing frameworks.
-- ❌ **Write tests without mocking dependencies**: Failing to mock dependencies can lead to tests that are not isolated and potentially fragile.
-- ✅ **Extend the base `Error` class**: When creating a custom error class, extend the base `Error` class to inherit its properties and methods.
+Rules that apply across the entire codebase:
+- ✅ **Use `vi.mock()` to mock modules**: Isolate dependencies by mocking entire modules.
+- ✅ **Use `vi.fn()` to mock functions**: Mock specific functions to control their behavior.
+- ❌ **Do not use `jest.mock()`**: Vitest has its own mocking system, so avoid using Jest's mocking functions.
+- ✅ **Use `vi.mock()` to mock dependencies**: Use `vi.mock()` to mock dependencies and isolate the component or function being tested.
+- ✅ **Use the `@injectable` decorator on all service classes**:
+- ✅ **Use the `@inject` decorator to inject services**:
+- ❌ **Do not use the `new` keyword to create service instances**:
 
 ## Domain Guidelines
-### 📁 All
-**[All Index](./all/all-index.md)** - General guidelines for all domains.
+### 📊 Backend
+**[Backend Index](./backend/backend-index.md)** - Guidelines for backend development, including dependency injection, error handling, and layer separation.
 Key guidelines:
-- [Console Logging](./all/console-logging.md) - Guidelines for console logging.
-- [Mocking Strategies Vitest](./all/mocking-strategies-vitest.md) - Strategies for mocking dependencies in Vitest.
-- [Test Organization Vitest](./all/test-organization-vitest.md) - Best practices for organizing tests in Vitest.
+- [Dependency Injection](./backend/dependency-injection.md) - Implement dependency injection for loose coupling.
+- [Error Handling](./backend/error-handling.md) - Handle errors effectively to ensure robustness.
+- [Layer Separation Pattern](./backend/layer-separation-pattern.md) - Separate concerns into distinct layers for maintainability.
 
-### 🖥️ Backend
-**[Backend Index](./backend/backend-index.md)** - Guidelines for backend development.
+### 🌐 All
+**[All Index](./all/all-index.md)** - General guidelines applicable to all domains.
 Key guidelines:
-- [Custom Error Classes](./backend/custom-error-classes.md) - Creating custom error classes.
-- [Dependency Injection](./backend/dependency-injection.md) - Using dependency injection in backend code.
-- [Error Handling Try Catch](./backend/error-handling-try-catch.md) - Best practices for error handling using try-catch blocks.
+- [Mocking Strategies](./all/mocking-strategies.md) - Strategies for mocking dependencies.
+- [Typescript Imports](./all/typescript-imports.md) - Best practices for TypeScript imports.
+- [Vitest Testing](./all/vitest-testing.md) - Guidelines for testing with Vitest.
 
 ## Project Structure
-```
+```markdown
 GuideGen/
 ├── docs/
 │   └── adr/
@@ -101,4 +101,3 @@ GuideGen/
     │       └── services/
     └── utils/
 ```
-📖 [Project README](../README.md) - Full project documentation

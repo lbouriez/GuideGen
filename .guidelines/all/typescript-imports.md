@@ -1,104 +1,98 @@
-# all - typescript-imports
-
-> **Summary**: This guideline documents the existing TypeScript import patterns in the codebase, including the use of path aliases and relative imports.
-> 
-> The codebase utilizes a combination of path aliases and relative imports to manage dependencies between modules. Path aliases are configured in the `tsconfig.json` file, allowing for imports starting with `@/`. Relative imports are used for local dependencies within the same directory or subdirectories.
-
 ---
+title: TypeScript Import Conventions
+description: Documenting existing TypeScript import patterns in the codebase
+---
+
+# TypeScript Imports - Conventions
+
+> This guideline documents the existing import conventions used in the codebase.
+> It covers both relative imports and path aliases configured in `tsconfig.json`.
+
+The codebase uses a combination of relative imports and path aliases for importing modules. Path aliases are configured in `tsconfig.json` to simplify imports and make the code more readable.
 
 ## When to Use This Guide
 
 Use this guide when:
-- Working with existing code that uses TypeScript imports
-- Adding new dependencies or modules to the project
-- Refactoring code to improve import organization
-
----
+- Importing modules within the project
+- Configuring `tsconfig.json` for path aliases
 
 ## Overview
 
-The codebase uses TypeScript imports to manage dependencies between modules. The `tsconfig.json` file configures path aliases, enabling imports starting with `@/`. Relative imports are used for local dependencies within the same directory or subdirectories.
+The codebase uses the following import conventions:
 
-### Path Aliases
-
-Path aliases are configured in the `tsconfig.json` file as follows:
-```json
-{
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["src/*"]
-    }
-  }
-}
-```
-This configuration allows for imports starting with `@/`, which are resolved to the `src/` directory.
+* Relative imports for modules within the same directory or nearby directories
+* Path aliases for imports from other parts of the project, configured in `tsconfig.json`
 
 ### Relative Imports
 
-Relative imports are used for local dependencies within the same directory or subdirectories. For example:
-```typescript
-import { GuidelineFileService } from './services/GuidelineFileService';
-```
-This import statement imports the `GuidelineFileService` class from a local file within the same directory.
+Relative imports are used for modules within the same directory or nearby directories. For example:
 
-### Importing Types
-
-Types are imported using the `import type` statement, which allows for better tree-shaking:
 ```typescript
+// File: src/core/workflows/claude-update.ts
 import type { IProviderClient } from '../../providers/types';
 ```
-This import statement imports the `IProviderClient` type from a separate file, without importing any implementation details.
 
----
+### Path Aliases
+
+Path aliases are configured in `tsconfig.json` to simplify imports. The codebase uses the following path aliases:
+
+* `@/types` for type definitions
+* `@/providers` for provider modules
+* `@/core` for core modules
+
+For example:
+
+```typescript
+// File: src/core/workflows/claude-update.ts
+import type { TechProfile } from '@/types';
+import type { IProviderClient } from '@/providers/types';
+```
 
 ## Key Rules
 
 ### ✅ DO
 
-- ✅ **Use path aliases for imports starting with `@/`**:
-  ```typescript
-  import { GuidelineFileService } from '@/core/workflows/services';
-  ```
-- ✅ **Use relative imports for local dependencies**:
-  ```typescript
-  import { GuidelineFileService } from './services/GuidelineFileService';
-  ```
-- ✅ **Import types with `import type` for better tree-shaking**:
-  ```typescript
-  import type { IProviderClient } from '../../providers/types';
-  ```
+* Use relative imports for modules within the same directory or nearby directories
+* Use path aliases for imports from other parts of the project, configured in `tsconfig.json`
 
 ### ❌ NEVER
 
-- ❌ **Do not use `require()` for imports**:
-  ```typescript
-  // ❌ Bad
-  const GuidelineFileService = require('./services/GuidelineFileService');
-  // ✅ Good
-  import { GuidelineFileService } from './services/GuidelineFileService';
-  ```
-
----
+* Use absolute imports without configuring path aliases in `tsconfig.json`
+* Use `require` statements for importing modules (use ES6 imports instead)
 
 ## Complete Example
 
-The following example demonstrates the use of path aliases and relative imports:
+The following example shows how to import a module using a path alias:
+
 ```typescript
 // File: src/core/workflows/claude-update.ts
-import { GuidelineFileService } from '@/core/workflows/services';
-import type { IProviderClient } from '../../providers/types';
+import type { TechProfile } from '@/types';
+import type { IProviderClient } from '@/providers/types';
 
-// ...
-
+// Use the imported types
 export async function runClaudeArtifactsWorkflow(
   client: IProviderClient,
   targetPath: string,
   techProfile: TechProfile,
-  workflow: ClaudeArtifactsWorkflow,
-  interactive: boolean = true,
-  onProgress?: (message: string) => void
-): Promise<ClaudeArtifactsWorkflowResult> {
+  // ...
+) {
   // ...
 }
 ```
-This example uses a path alias to import the `GuidelineFileService` class and a relative import to import the `IProviderClient` type.
+
+Note that the `tsconfig.json` file contains the following configuration for path aliases:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "@/types": ["src/types"],
+      "@/providers": ["src/providers"],
+      "@/core": ["src/core"]
+    }
+  }
+}
+```
+
+This configuration allows the codebase to use path aliases for importing modules from other parts of the project.

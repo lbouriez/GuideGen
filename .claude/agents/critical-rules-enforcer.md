@@ -13,59 +13,79 @@ trigger: on_save
 
 **Guideline**: [Project Guidelines](../../.guidelines/index.md)
 
-**Rule**: "All code must adhere to the guidelines outlined in the project's .guidelines directory, including but not limited to, syntax, naming conventions, and best practices for TypeScript, Vitest, and TypeScript build tools."
+**Rule**: "All code must adhere to the guidelines outlined in the project's .guidelines directory."
 
 ## Why This Matters
 
-Adhering to the project guidelines is crucial for maintaining consistency, readability, and reliability across the codebase. It ensures that all team members are on the same page, making it easier to collaborate, review, and maintain the code.
+Adhering to the project guidelines is crucial for maintaining consistency, readability, and reliability across the codebase. It ensures that all team members are on the same page, making it easier to collaborate and maintain the project over time.
 
 ## Verification Steps
 
-1. **Syntax and Naming Conventions Check**
-   - Scan TypeScript files for adherence to the project's naming conventions and syntax guidelines.
-   - Validate that all variables, functions, and classes are named according to the guidelines.
+1. **Check for TypeScript Syntax**
+   - Look for correct use of TypeScript syntax, including type annotations and interfaces.
+   - Validate that all TypeScript files are properly formatted and follow the project's naming conventions.
 
-2. **Testing Framework Compliance**
-   - Verify that all tests are written using Vitest and follow the testing guidelines outlined in the project guidelines.
-   - Check that tests cover all critical paths and functionalities.
+2. **Verify Vitest Testing**
+   - Scan for the presence of unit tests written in Vitest for all critical components.
+   - Report any components lacking sufficient test coverage.
 
-3. **Build Tools Configuration**
-   - Ensure that TypeScript, TSX, and TSC are configured correctly according to the project guidelines.
-   - Validate that the build process follows the outlined best practices.
+3. **Validate Build Tools Configuration**
+   - Check that TypeScript, TSX, and TSC are correctly configured and used in the build process.
+   - Ensure that the build tools are properly set up to handle the project's specific needs, such as compiling TypeScript to JavaScript.
 
 ## Example Violations
 
 ### ❌ Bad
 ```typescript
-// Violation of naming convention
-let myVariable = 'example';
-
-// Incorrect test structure
-test('example test', () => {
-  // Test implementation
-});
+// Missing type annotation
+function add(a, b) {
+  return a + b;
+}
 ```
 
 ### ✅ Good
 ```typescript
-// Adherence to naming convention
-let myVariableName = 'example';
+// Correct type annotation
+function add(a: number, b: number): number {
+  return a + b;
+}
+```
 
-// Correct test structure using Vitest
-it('should pass example test', () => {
-  // Test implementation
+## Example Violations - Testing
+
+### ❌ Bad
+```typescript
+// Component without a test
+function criticalComponent() {
+  // Critical functionality
+}
+```
+
+### ✅ Good
+```typescript
+// Component with a test
+function criticalComponent() {
+  // Critical functionality
+}
+
+// tests/criticalComponent.test.ts
+import { describe, expect, it } from 'vitest';
+import { criticalComponent } from './criticalComponent';
+
+describe('criticalComponent', () => {
+  it('should work as expected', () => {
+    // Test implementation
+  });
 });
 ```
 
 ## Auto-Fix
 
-Can this violation be auto-fixed? Yes
+Can this violation be auto-fixed? No
 
-If yes, describe the transformation:
-- Rename variables to follow the naming convention guidelines.
-- Update test structures to comply with Vitest and the project's testing guidelines.
+Due to the complexity and variability of potential violations, auto-fixing is not feasible for this agent. Instead, it will provide detailed reports of violations and suggestions for manual correction.
 
 ## Related Agents
 
 - [Code Formatter](./code-formatter.md) - Enforces consistent code formatting across the project.
-- [Test Coverage Agent](./test-coverage-agent.md) - Ensures that all code paths are adequately covered by tests.
+- [Test Coverage Agent](./test-coverage-agent.md) - Ensures that all code has adequate test coverage.

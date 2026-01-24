@@ -94,6 +94,26 @@ Return valid JSON with mergedContent and changes array.`;
 }
 
 /**
+ * Normalize AI's enum values to expected values
+ */
+function normalizeChangeType(type: string): 'added' | 'modified' | 'removed' | 'kept' {
+  const normalized = type.toLowerCase();
+  if (normalized === 'updated' || normalized === 'changed') return 'modified';
+  if (normalized === 'added') return 'added';
+  if (normalized === 'removed' || normalized === 'deleted') return 'removed';
+  if (normalized === 'kept' || normalized === 'unchanged') return 'kept';
+  // Default fallback
+  return 'modified';
+}
+
+function normalizeSignificance(sig: string): 'minor' | 'major' {
+  const normalized = sig.toLowerCase();
+  if (normalized === 'major' || normalized === 'high' || normalized === 'critical') return 'major';
+  // Everything else (minor, low, none, etc.) → minor
+  return 'minor';
+}
+
+/**
  * Parse the new merge response format (markdown + JSON code blocks)
  */
 function parseMergeResponse(response: string): IntelligentMergeResult | null {
@@ -112,6 +132,15 @@ function parseMergeResponse(response: string): IntelligentMergeResult | null {
 
   try {
     const changesData = JSON.parse(changesMatch[1]);
+
+    // Normalize AI's enum values before validation
+    if (changesData.changes && Array.isArray(changesData.changes)) {
+      changesData.changes = changesData.changes.map((change: any) => ({
+        ...change,
+        type: normalizeChangeType(change.type),
+        significance: normalizeSignificance(change.significance)
+      }));
+    }
 
     // Validate with Zod schema (without mergedContent)
     const ChangesOnlySchema = IntelligentMergeResultSchema.omit({ mergedContent: true });
@@ -147,9 +176,13 @@ export async function intelligentMerge(
       MERGE_USER_PROMPT(existingContent, newContent, contentType)
     );
 
+    // DEBUG: Log first 500 chars of AI response
+    logger.debug(`AI merge response (first 500 chars): ${response.content.substring(0, 500)}`);
+
     // Try new format first (markdown + JSON code blocks)
     const newFormatResult = parseMergeResponse(response.content);
     if (newFormatResult) {
+      logger.debug('Successfully parsed new format (markdown + JSON)');
       // Determine if confirmation needed (has major removals)
       const requiresConfirmation = newFormatResult.changes.some(
         (c) => c.type === 'removed' && c.significance === 'major'
@@ -161,10 +194,13 @@ export async function intelligentMerge(
       };
     }
 
+    logger.debug('New format parsing failed, trying old format (full JSON)');
+
     // Fall back to old format (full JSON) for backwards compatibility
     const parseResult = parseAIResponse(IntelligentMergeResultSchema, response.content);
 
     if (!parseResult.success) {
+      logger.warn(`Both parsers failed. Full AI response:\n${response.content}`);
       throw new Error(`Failed to parse AI merge response: ${parseResult.error}`);
     }
 

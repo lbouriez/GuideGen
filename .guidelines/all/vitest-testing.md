@@ -1,65 +1,134 @@
-# all - vitest-testing
-
-> **Summary**: This guideline documents the existing testing patterns in the codebase, specifically focusing on Vitest as the testing framework. It outlines how tests are structured, written, and executed within the project.
-> 
-> Detailed context about why this exists and when to use it: The codebase utilizes Vitest for unit and integration testing, ensuring the reliability and stability of the application. Understanding the testing patterns is crucial for maintaining and extending the codebase.
-
 ---
+title: Vitest Testing Patterns
+description: Patterns for writing unit tests and integration tests using Vitest
+---
+
+# Vitest Testing - Unit and Integration Tests
+
+> Vitest is used for unit and integration testing in this project.
+> The testing framework provides a lot of features out of the box, including mocking, code coverage, and parallel testing.
 
 ## When to Use This Guide
 
 Use this guide when:
-- Writing new tests for the application
-- Refactoring existing tests to align with the project's standards
-- Troubleshooting test failures or inconsistencies
-
----
+- Writing unit tests for individual components or functions
+- Writing integration tests for larger parts of the application
+- Using Vitest for testing
 
 ## Overview
 
-The codebase employs Vitest as its testing framework, leveraging its features for unit and integration testing. The tests are written in TypeScript, utilizing the `describe`, `it`, and `expect` functions from Vitest. Mocking is achieved using `vi.mock` and `vi.fn` from the `vitest` package.
+Vitest is a fast and efficient testing framework that is used in this project. It provides a lot of features out of the box, including mocking, code coverage, and parallel testing.
+
+### Mocking Dependencies
+
+In Vitest, dependencies can be mocked using the `vi.mock` function. This function takes a module path as an argument and returns a mock implementation of the module.
+
+```typescript
+// File: tests/unit/core/workflows/guidelines-update.test.ts
+vi.mock('../../../../src/core/phases/guidelines/generator.js', () => ({
+  generateAllGuidelines: vi.fn(),
+}));
+```
+
+### Writing Unit Tests
+
+Unit tests in Vitest are written using the `describe` and `it` functions. The `describe` function is used to group related tests together, and the `it` function is used to define a single test.
+
+```typescript
+// File: tests/unit/core/workflows/guidelines-update.test.ts
+describe('Guidelines Workflow', () => {
+  it('should fail when project structure is missing', async () => {
+    const invalidProfile = { ...mockTechProfile, structure: undefined };
+
+    const result = await runGuidelinesWorkflow(
+      mockClient,
+      '/test/project',
+      invalidProfile,
+      mockPatterns,
+      false
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Project structure not found');
+    expect(result.guidelinesGenerated).toBe(0);
+  });
+});
+```
+
+### Writing Integration Tests
+
+Integration tests in Vitest are written using the same `describe` and `it` functions as unit tests. However, integration tests typically involve more complex scenarios and may involve multiple components or modules.
+
+```typescript
+// File: tests/integration/workflows/setup.workflow.integration.test.ts
+describe('Setup Workflow Integration', () => {
+  it('should complete all phases successfully', async () => {
+    // Mock successful responses
+    mockRunDiscoveryPhase.mockResolvedValue({
+      success: true,
+      data: {
+        stack: {
+          languages: ['TypeScript'],
+          frameworks: ['React'],
+          buildTools: ['Vite'],
+          testingFrameworks: ['Vitest'],
+          packageManager: 'npm',
+        },
+        isMonorepo: false,
+        structure: {
+          root: '/test/project',
+          directories: ['src', 'tests'],
+          keyFiles: ['package.json'],
+          configFiles: ['package.json', 'tsconfig.json'],
+        },
+      },
+    });
+
+    // ...
+  });
+});
+```
 
 ## Key Rules
 
 ### ✅ DO
 
-- ✅ **Use Vitest for testing**: The codebase uses Vitest for all testing needs. Ensure that all new tests are written using Vitest.
-  ```typescript
-  import { describe, it, expect } from 'vitest';
-  ```
-- ✅ **Write descriptive test names**: Test names should clearly describe the scenario being tested.
-  ```typescript
-  it('should generate guidelines when none exist', async () => {
-    // Test implementation
-  });
-  ```
-- ✅ **Use mocking for dependencies**: Utilize `vi.mock` and `vi.fn` to mock dependencies and isolate the unit being tested.
+- ✅ **Use `vi.mock` to mock dependencies**: Use `vi.mock` to mock dependencies in your tests.
   ```typescript
   vi.mock('../../../../src/core/phases/guidelines/generator.js', () => ({
     generateAllGuidelines: vi.fn(),
   }));
   ```
+- ✅ **Use `describe` and `it` to write tests**: Use `describe` and `it` to write unit tests and integration tests.
+  ```typescript
+  describe('Guidelines Workflow', () => {
+    it('should fail when project structure is missing', async () => {
+      // ...
+    });
+  });
+  ```
 
 ### ❌ NEVER
 
-- ❌ **Use Jest or other testing frameworks**: The codebase is set up to use Vitest. Avoid introducing other testing frameworks.
+- ❌ **Do not use `jest` syntax**: Do not use `jest` syntax in your tests. Instead, use `vi` functions provided by Vitest.
   ```typescript
-  // ❌ Bad: Using Jest
-  import { test, expect } from '@jest/globals';
-  ```
-- ❌ **Write tests without mocking dependencies**: Failing to mock dependencies can lead to tests that are not isolated and potentially fragile.
-  ```typescript
-  // ❌ Bad: Not mocking dependencies
-  import { generateAllGuidelines } from '../../../../src/core/phases/guidelines/generator.js';
-  ```
+  // ❌ Bad
+  jest.mock('../../../../src/core/phases/guidelines/generator.js', () => ({
+    generateAllGuidelines: jest.fn(),
+  }));
 
----
+  // ✅ Good
+  vi.mock('../../../../src/core/phases/guidelines/generator.js', () => ({
+    generateAllGuidelines: vi.fn(),
+  }));
+  ```
 
 ## Complete Example
 
-A complete example of a test suite for the `GuidelinesWorkflow` can be seen in the `tests/unit/core/workflows/guidelines-update.test.ts` file:
+Here is a complete example of a unit test written using Vitest:
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// File: tests/unit/core/workflows/guidelines-update.test.ts
+import { describe, it, expect, vi } from 'vitest';
 import { runGuidelinesWorkflow } from '../../../../src/core/workflows/guidelines-update.js';
 import type { TechProfile, PatternReport, GeneratedGuideline } from '../../../../src/types/index.js';
 
@@ -68,12 +137,23 @@ vi.mock('../../../../src/core/phases/guidelines/generator.js', () => ({
   generateAllGuidelines: vi.fn(),
 }));
 
-// Test suite
+// ...
+
 describe('Guidelines Workflow', () => {
-  // Test cases
-  it('should generate guidelines when none exist', async () => {
-    // Test implementation
+  it('should fail when project structure is missing', async () => {
+    const invalidProfile = { ...mockTechProfile, structure: undefined };
+
+    const result = await runGuidelinesWorkflow(
+      mockClient,
+      '/test/project',
+      invalidProfile,
+      mockPatterns,
+      false
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Project structure not found');
+    expect(result.guidelinesGenerated).toBe(0);
   });
 });
 ```
-This example demonstrates how to structure a test suite, mock dependencies, and write test cases using Vitest.

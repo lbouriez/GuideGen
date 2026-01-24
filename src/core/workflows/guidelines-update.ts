@@ -15,6 +15,8 @@ import { transformPatterns } from '../phases/guidelines/transformer';
 import { printSuccess } from '../../utils/display';
 import { GuidelineFileService } from './services';
 import { InputValidator } from '../../validation/input-validator';
+import { extractAllMetadata } from './services/frontmatter-parser';
+import { matchGuidelinesWithAI } from './services/guideline-matcher';
 
 export interface GuidelinesWorkflowResult {
   success: boolean;
@@ -199,16 +201,22 @@ async function handleUpdateMode(
   if (onProgress) onProgress('Reading existing guidelines...');
   const existingGuidelines = fileService.readAll(targetPath);
 
-  // Prepare files for merge
-  if (onProgress) onProgress('Intelligently merging with existing content...');
-  const filesToMerge = guidelines.map(g => ({
-    fileName: `${g.domain}/${g.fileName}`,
-    existing: existingGuidelines.get(`${g.domain}/${g.fileName}`) || null,
-    generated: g.content,
-    type: 'guideline' as const
-  }));
+  // Create a console logger for merge operations (so we can see errors)
+  const consoleLogger: ILogger = {
+    debug: (msg: string) => console.log(`[DEBUG] ${msg}`),
+    log: (msg: string) => console.log(`[LOG] ${msg}`),
+    info: (msg: string) => console.log(`[INFO] ${msg}`),
+    warn: (msg: string, error?: any) => {
+      console.warn(`[WARN] ${msg}`);
+      if (error) console.warn(error);
+    },
+    error: (msg: string, error?: any) => {
+      console.error(`[ERROR] ${msg}`);
+      if (error) console.error(error);
+    }
+  };
 
-  // Create a no-op logger for merge operations
+  // Create a no-op logger for AI matching (less verbose)
   const noOpLogger: ILogger = {
     debug: () => {},
     log: () => {},
@@ -217,11 +225,54 @@ async function handleUpdateMode(
     error: () => {}
   };
 
-  // Perform merge
+  // Extract metadata from existing guidelines
+  if (onProgress) onProgress('Extracting metadata from existing guidelines...');
+  const existingMetadata = extractAllMetadata(existingGuidelines);
+  console.log(`[INFO] Found ${existingMetadata.length} existing guidelines with metadata`);
+
+  // Use AI to match guidelines
+  if (onProgress) onProgress('Matching guidelines with AI...');
+  const matchDecisions = await matchGuidelinesWithAI(
+    existingMetadata,
+    guidelines.map(g => g.type),
+    client,
+    noOpLogger
+  );
+
+  // Prepare files for merge based on AI decisions
+  if (onProgress) onProgress('Intelligently merging with existing content...');
+  const filesToMerge = guidelines.map(g => {
+    const decision = matchDecisions.get(g.type);
+
+    if (decision?.action === 'update' && decision.existingFileName) {
+      // Update existing guideline
+      const existing = existingGuidelines.get(decision.existingFileName);
+      console.log(`[INFO] Matched ${g.type} → ${decision.existingFileName} (${decision.reason})`);
+
+      return {
+        fileName: `${g.domain}/${g.fileName}`,
+        existing: existing || null,
+        generated: g.content,
+        type: 'guideline' as const
+      };
+    } else {
+      // Create new guideline
+      console.log(`[INFO] Creating new guideline: ${g.type} (${decision?.reason || 'no match'})`);
+
+      return {
+        fileName: `${g.domain}/${g.fileName}`,
+        existing: null,
+        generated: g.content,
+        type: 'guideline' as const
+      };
+    }
+  });
+
+  // Perform merge (use consoleLogger to see errors)
   const mergeResults = await batchIntelligentMerge(
     client,
     filesToMerge,
-    noOpLogger,
+    consoleLogger,  // Use console logger to see merge errors
     (current, total, fileName) => {
       if (onProgress) onProgress(`Merging ${current}/${total}: ${fileName}`);
     }
