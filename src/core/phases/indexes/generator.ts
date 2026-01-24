@@ -81,8 +81,8 @@ async function getProjectInfo(targetPath: string, logger?: ILogger): Promise<{
   projectTree: string;
 }> {
   try {
-    // Generate project tree structure
-    const projectTree = await generateProjectTree(targetPath, 3, 10);
+    // Generate project tree structure (directories only for cleaner overview)
+    const projectTree = await generateProjectTree(targetPath, 3, 10, true);
 
     const packageJsonPath = join(targetPath, 'package.json');
     if (existsSync(packageJsonPath)) {

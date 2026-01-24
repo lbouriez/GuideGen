@@ -171,7 +171,7 @@ export async function runSetupWorkflow(
     }
 
     phasesCompleted.push('guidelines');
-    summary.guidelinesGenerated = guidelinesResult.data?.guidelinesGenerated ?? 0;
+    summary.guidelinesGenerated = (guidelinesResult as unknown as GuidelinesWorkflowResult).guidelinesGenerated ?? 0;
 
     if (onProgress) {
       onProgress(`✓ Generated ${summary.guidelinesGenerated} guidelines`);
@@ -189,7 +189,7 @@ export async function runSetupWorkflow(
     }
 
     phasesCompleted.push('indexes');
-    summary.indexesGenerated = indexesResult.data?.indexesGenerated ?? 0;
+    summary.indexesGenerated = (indexesResult as unknown as IndexesWorkflowResult).indexesGenerated ?? 0;
 
     if (onProgress) {
       onProgress(`✓ Generated ${summary.indexesGenerated} indexes`);
@@ -206,8 +206,9 @@ export async function runSetupWorkflow(
     }
 
     phasesCompleted.push('claude-artifacts');
-    summary.skillsGenerated = artifactsResult.data?.skillsGenerated ?? 0;
-    summary.agentsGenerated = artifactsResult.data?.agentsGenerated ?? 0;
+    const artifactsData = artifactsResult as unknown as ClaudeArtifactsWorkflowResult;
+    summary.skillsGenerated = artifactsData.skillsGenerated ?? 0;
+    summary.agentsGenerated = artifactsData.agentsGenerated ?? 0;
 
     if (onProgress) {
       onProgress(`✓ Generated ${summary.skillsGenerated} skills and ${summary.agentsGenerated} agents`);

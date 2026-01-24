@@ -66,6 +66,14 @@ Analyze these categories ONLY if they are relevant to the detected tech stack:
 - Log levels
 - Structured logging
 
+### Testing Patterns (if testing frameworks are detected)
+- Test organization (describe, test, it, etc.)
+- Test file naming conventions
+- Mocking strategies (vi.mock, jest.mock, etc.)
+- Setup/teardown patterns (beforeEach, afterEach)
+- Assertion patterns (expect, assert)
+- Test structure (AAA: Arrange, Act, Assert)
+
 ## Pattern Frequency
 
 Rate each pattern:
@@ -141,7 +149,8 @@ Focus on UI/UX patterns, component architecture, and user interaction.
 - Architecture Patterns: Include (component composition, hooks)
 - State Management: Include (React state, context, external libraries)
 - Error Handling: Include (error boundaries, user-facing errors)
-- Logging Patterns: Include if client-side logging exists`;
+- Logging Patterns: Include if client-side logging exists
+- Testing Patterns: Include if testing frameworks are detected (component testing, mocking, assertions)`;
 
     case 'backend':
     case 'api':
@@ -152,7 +161,8 @@ Focus on server patterns, data handling, and API design.
 - Architecture Patterns: Always include (layers, DI, repositories)
 - State Management: Usually omit (servers typically don't manage UI state)
 - Error Handling: Always include (API error responses, logging)
-- Logging Patterns: Always include (server-side logging)`;
+- Logging Patterns: Always include (server-side logging)
+- Testing Patterns: Include if testing frameworks are detected (test organization, mocking, assertions)`;
 
     default:
       return `

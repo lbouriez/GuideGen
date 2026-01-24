@@ -116,7 +116,7 @@ export async function runDiscoveryPhase(
 
     // Use AI provider to analyze
     const client = await createProviderClient(depth);
-    const techProfile = await analyzeTechStack(client, folderTree, configContents);
+    const techProfile = await analyzeTechStack(client, folderTree, configContents, structure);
 
     // Ensure structure is populated
     techProfile.structure = {

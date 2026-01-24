@@ -36,9 +36,16 @@ You will receive:
 - EXISTING content (what the user currently has)
 - NEW content (what was just generated from codebase analysis)
 
-Your response MUST be valid JSON in this exact format:
+Your response MUST follow this exact format:
+
+## MERGED CONTENT
+\`\`\`markdown
+[The full merged markdown content goes here - no escaping needed]
+\`\`\`
+
+## CHANGES
+\`\`\`json
 {
-  "mergedContent": "the full merged markdown content",
   "changes": [
     {
       "type": "added|modified|removed|kept",
@@ -46,8 +53,15 @@ Your response MUST be valid JSON in this exact format:
       "description": "what changed and why",
       "significance": "minor|major"
     }
-  ]
+  ],
+  "requiresConfirmation": false
 }
+\`\`\`
+
+IMPORTANT:
+- Put the merged markdown content in the markdown code block (no escaping needed)
+- Put the changes array in the JSON code block
+- Both sections are required
 
 MERGE STRATEGY:
 - If section exists in BOTH: Keep existing if no significant codebase changes, otherwise merge intelligently
@@ -80,6 +94,44 @@ Return valid JSON with mergedContent and changes array.`;
 }
 
 /**
+ * Parse the new merge response format (markdown + JSON code blocks)
+ */
+function parseMergeResponse(response: string): IntelligentMergeResult | null {
+  // Extract merged content from markdown code block
+  const mergedContentMatch = response.match(/## MERGED CONTENT\s*```markdown\s*([\s\S]*?)```/);
+  if (!mergedContentMatch) {
+    return null;
+  }
+  const mergedContent = mergedContentMatch[1].trim();
+
+  // Extract changes from JSON code block
+  const changesMatch = response.match(/## CHANGES\s*```json\s*([\s\S]*?)```/);
+  if (!changesMatch) {
+    return null;
+  }
+
+  try {
+    const changesData = JSON.parse(changesMatch[1]);
+
+    // Validate with Zod schema (without mergedContent)
+    const ChangesOnlySchema = IntelligentMergeResultSchema.omit({ mergedContent: true });
+    const parseResult = ChangesOnlySchema.safeParse(changesData);
+
+    if (!parseResult.success) {
+      return null;
+    }
+
+    return {
+      mergedContent,
+      changes: parseResult.data.changes,
+      requiresConfirmation: parseResult.data.requiresConfirmation ?? false
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Intelligently merge existing content with new content using AI
  */
 export async function intelligentMerge(
@@ -95,7 +147,21 @@ export async function intelligentMerge(
       MERGE_USER_PROMPT(existingContent, newContent, contentType)
     );
 
-    // Parse and validate JSON response with Zod
+    // Try new format first (markdown + JSON code blocks)
+    const newFormatResult = parseMergeResponse(response.content);
+    if (newFormatResult) {
+      // Determine if confirmation needed (has major removals)
+      const requiresConfirmation = newFormatResult.changes.some(
+        (c) => c.type === 'removed' && c.significance === 'major'
+      );
+
+      return {
+        ...newFormatResult,
+        requiresConfirmation: requiresConfirmation || newFormatResult.requiresConfirmation
+      };
+    }
+
+    // Fall back to old format (full JSON) for backwards compatibility
     const parseResult = parseAIResponse(IntelligentMergeResultSchema, response.content);
 
     if (!parseResult.success) {

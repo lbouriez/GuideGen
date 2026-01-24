@@ -8,8 +8,27 @@
 import 'reflect-metadata';
 
 import { Command } from 'commander';
-import { resolve } from 'path';
-import { existsSync, statSync } from 'fs';
+import { resolve, join } from 'path';
+import { existsSync, statSync, readFileSync } from 'fs';
+
+// Load .env file into process.env at startup for non-interactive usage
+const envPath = join(process.cwd(), '.env');
+if (existsSync(envPath)) {
+  const envContent = readFileSync(envPath, 'utf-8');
+  const lines = envContent.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const [key, ...valueParts] = trimmed.split('=');
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join('=').trim();
+      // Only set if not already in environment (environment variables take precedence)
+      if (!process.env[key.trim()]) {
+        process.env[key.trim()] = value;
+      }
+    }
+  }
+}
 import type { AnalysisDepth } from './types';
 import {
   runSetupWorkflow,
@@ -26,16 +45,16 @@ import {
   printSuccess,
   printInfo,
   printDivider,
-} from './utils/display';
-import { ProviderManager } from './providers/manager';
-import { container } from './di/container';
-import { TYPES } from './di/identifiers';
-import type { ILogger } from './interfaces/services/ILogger';
-import type { ClaudeArtifactsWorkflow } from './workflows/claude-artifacts/ClaudeArtifactsWorkflow';
-import { generateAnalysisReport } from './core/phases/analysis-report';
-import { getErrorMessage } from './core/utils/errors';
-import { TargetPathSchema, AnalysisDepthSchema } from './validation/schemas';
-import { ValidationError } from './errors';
+} from './utils/display.js';
+import { ProviderManager } from './providers/manager.js';
+import { container } from './di/container.js';
+import { TYPES } from './di/identifiers.js';
+import type { ILogger } from './interfaces/services/ILogger.js';
+import type { ClaudeArtifactsWorkflow } from './workflows/claude-artifacts/ClaudeArtifactsWorkflow.js';
+import { generateAnalysisReport } from './core/phases/analysis-report.js';
+import { getErrorMessage } from './core/utils/errors.js';
+import { TargetPathSchema, AnalysisDepthSchema } from './validation/schemas.js';
+import { ValidationError } from './errors/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -101,7 +120,7 @@ program
 program
   .command('setup')
   .description('Full setup - analyze codebase and generate all artifacts')
-  .argument('[path]', 'Path to the project to analyze', '../')
+  .argument('[path]', 'Path to the project to analyze', '.')
   .option('-d, --depth <depth>', 'Analysis depth: quick, standard, thorough', 'standard')
   .option('--force-setup', 'Force re-run the AI provider setup')
   .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
@@ -121,7 +140,7 @@ program
 program
   .command('analyze')
   .description('Analysis only - detect patterns without generating files')
-  .argument('[path]', 'Path to the project to analyze', '../')
+  .argument('[path]', 'Path to the project to analyze', '.')
   .option('-d, --depth <depth>', 'Analysis depth: quick, standard, thorough', 'standard')
   .option('--force-setup', 'Force re-run the AI provider setup')
   .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
@@ -141,7 +160,7 @@ program
 program
   .command('guidelines')
   .description('Generate guidelines only')
-  .argument('[path]', 'Path to the project', '../')
+  .argument('[path]', 'Path to the project', '.')
   .option('-d, --depth <depth>', 'Analysis depth', 'standard')
   .option('--force-setup', 'Force re-run setup')
   .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
@@ -165,7 +184,7 @@ program
 program
   .command('indexes')
   .description('Generate/update index files')
-  .argument('[path]', 'Path to the project', '../')
+  .argument('[path]', 'Path to the project', '.')
   .option('--force-setup', 'Force re-run setup')
   .action(async (inputPath: string, options: { forceSetup: boolean }) => {
     try {
@@ -187,7 +206,7 @@ program
 program
   .command('claude')
   .description('Generate Claude skills and agents')
-  .argument('[path]', 'Path to the project', '../')
+  .argument('[path]', 'Path to the project', '.')
   .option('-d, --depth <depth>', 'Analysis depth', 'standard')
   .option('--force-setup', 'Force re-run setup')
   .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
@@ -338,5 +357,16 @@ async function runAnalyze(
     process.exit(1);
   }
 }
+
+// Add global error handlers
+process.on('uncaughtException', (error) => {
+  printError(`Fatal error: ${getErrorMessage(error)}`);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  printError(`Fatal error: ${getErrorMessage(reason)}`);
+  process.exit(1);
+});
 
 program.parse();

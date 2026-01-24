@@ -11,9 +11,6 @@ export { runSetupWorkflow } from './setup';
 // Re-export phases for direct access
 export { runDiscoveryPhase } from '../phases/discovery';
 export { runAnalysisPhase } from '../phases/analysis';
-export { runExtractionPhase } from '../phases/extraction';
-export { runGenerationPhase } from '../phases/generation';
-export { runSuggestPhase } from '../phases/suggest';
 
 // CLI-friendly wrapper functions
 import { resolve } from 'path';

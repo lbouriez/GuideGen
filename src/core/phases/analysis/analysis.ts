@@ -9,6 +9,7 @@ import type {
   PatternReport,
   PhaseResult,
   AnalysisDepth,
+  CodePattern,
 } from '@/types';
 import type { IProviderClient } from '@/providers/types';
 import { createProviderClient } from '@/providers/manager';
@@ -102,19 +103,72 @@ async function readSelectedFiles(
 }
 
 /**
+ * Filter patterns based on frequency threshold
+ * For large projects, remove patterns that appear in <5% of analyzed files
+ */
+function filterLowFrequencyPatterns(
+  patternReport: PatternReport,
+  totalFiles: number
+): PatternReport {
+  // Only apply filtering for larger projects (50+ files)
+  if (totalFiles < 50) {
+    return patternReport;
+  }
+
+  // Calculate minimum occurrence threshold (5% of files, minimum 3 files)
+  const minOccurrences = Math.max(3, Math.ceil(totalFiles * 0.05));
+
+  const filterPatterns = (patterns?: CodePattern[]): CodePattern[] | undefined => {
+    if (!patterns || patterns.length === 0) return patterns;
+
+    return patterns.filter(pattern => {
+      const occurrences = pattern.files?.length || 0;
+
+      // Keep if frequency is 'always' (regardless of file count)
+      if (pattern.frequency === 'always') return true;
+
+      // Keep if frequency is 'common' (regardless of file count)
+      if (pattern.frequency === 'common') return true;
+
+      // For 'occasional' patterns, check occurrence threshold
+      if (pattern.frequency === 'occasional') {
+        return occurrences >= minOccurrences;
+      }
+
+      return true;
+    });
+  };
+
+  return {
+    ...patternReport,
+    importPatterns: filterPatterns(patternReport.importPatterns),
+    namingConventions: filterPatterns(patternReport.namingConventions),
+    architecturePatterns: filterPatterns(patternReport.architecturePatterns),
+    stateManagement: filterPatterns(patternReport.stateManagement),
+    errorHandling: filterPatterns(patternReport.errorHandling),
+    loggingPatterns: filterPatterns(patternReport.loggingPatterns),
+    testingPatterns: filterPatterns(patternReport.testingPatterns),
+  };
+}
+
+/**
  * Analyze patterns using AI
  */
 async function analyzePatterns(
   client: IProviderClient,
   techProfile: TechProfile,
-  fileContent: string
+  fileContent: string,
+  totalFiles: number
 ): Promise<PatternReport> {
   const projectType = determineProjectType(techProfile);
 
-  return client.completeWithJson<PatternReport>(
+  const rawReport = await client.completeWithJson<PatternReport>(
     ANALYSIS_SYSTEM_PROMPT,
     ANALYSIS_USER_PROMPT(JSON.stringify(techProfile, null, 2), fileContent, projectType)
   );
+
+  // Filter out low-frequency patterns for large projects
+  return filterLowFrequencyPatterns(rawReport, totalFiles);
 }
 
 /**
@@ -152,7 +206,12 @@ export async function runAnalysisPhase(
 
     // Step 3: Analyze patterns
     spinner.text = 'Analyzing code patterns and architecture...';
-    const patternReport = await analyzePatterns(client, techProfile, concatenatedFiles.content);
+    const patternReport = await analyzePatterns(
+      client,
+      techProfile,
+      concatenatedFiles.content,
+      concatenatedFiles.fileCount
+    );
 
     spinner.stop();
     printSuccess('Analysis phase complete');

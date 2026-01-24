@@ -53,7 +53,7 @@ export class GroqClient implements IProviderClient {
           },
         ],
         max_tokens: maxTokens,
-        temperature: 0.1, // Low temperature for consistent code analysis
+        temperature: 0.0, // Lowest temperature for maximum consistency and minimal hallucination
       });
 
       const choice = response.choices[0];

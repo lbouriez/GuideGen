@@ -33,6 +33,7 @@ export interface PatternReport {
   stateManagement?: CodePattern[];
   errorHandling?: CodePattern[];
   loggingPatterns?: CodePattern[];
+  testingPatterns?: CodePattern[];
 }
 
 // Re-export to avoid duplication

@@ -99,6 +99,7 @@ export interface PatternReport {
   stateManagement?: CodePattern[];
   errorHandling?: CodePattern[];
   loggingPatterns?: CodePattern[];
+  testingPatterns?: CodePattern[];
   backend?: BackendPatterns;
   frontend?: FrontendPatterns;
   shared?: SharedPatterns;

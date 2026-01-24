@@ -7,7 +7,7 @@ import { injectable, inject } from 'inversify';
 import { TYPES } from '../../../di/identifiers.js';
 import type { ILogger } from '../../../interfaces/services/ILogger.js';
 import type { IProviderClient } from '../../../providers/types.js';
-import type { GeneratedGuideline, ExtractedRule } from '../../../types/index.js';
+import type { GeneratedGuideline, ExtractedRule, TechProfile } from '../../../types/index.js';
 import { generateAllAgents, type GeneratedAgent } from '../../../core/phases/claude-artifacts/agents.js';
 import { validateAllAgents } from '../../../core/phases/claude-artifacts/validator.js';
 
@@ -32,6 +32,7 @@ export class AgentGeneratorService {
     client: IProviderClient,
     rules: ExtractedRule[],
     guidelines: GeneratedGuideline[],
+    techProfile: TechProfile,
     onProgress?: (current: number, total: number, name: string) => void
   ): Promise<AgentGenerationResult> {
     try {
@@ -41,6 +42,7 @@ export class AgentGeneratorService {
         client,
         rules,
         guidelines,
+        techProfile,
         this.maxAgents,
         onProgress
       );

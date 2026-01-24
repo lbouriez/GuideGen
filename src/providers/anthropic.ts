@@ -43,6 +43,7 @@ export class AnthropicClient implements IProviderClient {
       const response = await this.client.messages.create({
         model,
         max_tokens: maxTokens,
+        temperature: 0.0, // Lowest temperature for maximum consistency and minimal hallucination
         system: systemPrompt,
         messages: [
           {

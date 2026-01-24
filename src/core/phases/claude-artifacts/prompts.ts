@@ -173,9 +173,14 @@ export function AGENT_USER_PROMPT(
   agentName: string,
   rule: string,
   guidelineReference: string,
-  examples: string
+  examples: string,
+  techStackSummary: string
 ): string {
   return `Generate a Claude Code agent for: **${agentName}**
+
+## Project Tech Stack
+
+${techStackSummary}
 
 ## Rule to Enforce
 
@@ -189,11 +194,20 @@ ${guidelineReference}
 
 ${examples}
 
+## CRITICAL - Tech Stack Validation
+
+**IMPORTANT**: All example code in this agent MUST match the project's tech stack listed above.
+
+- Use the EXACT languages, frameworks, and tools from the tech stack
+- DO NOT use examples from different languages (e.g., Python in a TypeScript project)
+- Example violations and corrections must be executable in this project's environment
+- Match the syntax and conventions of the detected languages
+
 ## Instructions
 
 1. Clearly reference the guideline that defines this rule
 2. Define verification steps that can be automated
-3. Show example violations and correct implementations
+3. Show example violations and correct implementations **using the tech stack languages**
 4. Indicate if auto-fix is possible
 5. Choose appropriate model (haiku for simple, sonnet for complex)
 6. Set trigger (on_edit, on_save, on_commit)

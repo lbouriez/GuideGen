@@ -18,6 +18,11 @@ import { AgentGeneratorService } from './services/AgentGeneratorService.js';
 import { ClaudeMdGeneratorService } from './services/ClaudeMdGeneratorService.js';
 import { ArtifactMergerService } from './services/ArtifactMergerService.js';
 import { GuidelineExtractor } from './services/GuidelineExtractor.js';
+import {
+  createDefaultTechStackSkillRegistry,
+  TechStackSkillOrchestrator,
+} from '../../core/phases/claude-artifacts/tech-stack-skills/index.js';
+import type { GeneratedSkill } from '../../core/phases/claude-artifacts/skills.js';
 
 export interface ClaudeArtifactsWorkflowResult {
   success: boolean;
@@ -47,7 +52,7 @@ export class ClaudeArtifactsWorkflow {
   async execute(
     client: IProviderClient,
     targetPath: string,
-    _techProfile: TechProfile,
+    techProfile: TechProfile,
     interactive: boolean = true,
     onProgress?: (message: string) => void
   ): Promise<ClaudeArtifactsWorkflowResult> {
@@ -73,6 +78,7 @@ export class ClaudeArtifactsWorkflow {
       const { skills, agents, claudeMd } = await this.generateArtifacts(
         client,
         targetPath,
+        techProfile,
         rules,
         guidelines,
         onProgress
@@ -153,12 +159,13 @@ export class ClaudeArtifactsWorkflow {
   private async generateArtifacts(
     client: IProviderClient,
     targetPath: string,
+    techProfile: TechProfile,
     rules: ReturnType<GuidelineExtractor['extractRules']>,
     guidelines: ReturnType<GuidelineExtractor['readGuidelines']>,
     onProgress?: (message: string) => void
   ) {
-    // Generate skills
-    this.progress(onProgress, 'Generating skills...');
+    // Generate workflow skills (from guidelines)
+    this.progress(onProgress, 'Generating workflow skills...');
     const skillResult = await this.skillGenerator.generate(
       client,
       rules,
@@ -172,12 +179,27 @@ export class ClaudeArtifactsWorkflow {
       throw new Error(skillResult.error);
     }
 
+    // Generate tech-stack-specific skills (security, code quality, etc.)
+    this.progress(onProgress, 'Analyzing tech stack for applicable skills...');
+    const packageJson = this.guidelineExtractor.getPackageJsonScripts(targetPath) || {};
+    const techStackSkills = await this.generateTechStackSkills(
+      client,
+      techProfile,
+      guidelines,
+      packageJson,
+      onProgress
+    );
+
+    // Combine all skills
+    const allSkills = [...skillResult.skills, ...techStackSkills];
+
     // Generate agents
     this.progress(onProgress, 'Generating agents...');
     const agentResult = await this.agentGenerator.generate(
       client,
       rules,
       guidelines,
+      techProfile,
       (current, total, name) => {
         this.progress(onProgress, `Generating agent ${current}/${total}: ${name}`);
       }
@@ -189,20 +211,69 @@ export class ClaudeArtifactsWorkflow {
 
     // Generate CLAUDE.md
     const projectName = path.basename(targetPath);
-    const packageScripts = this.guidelineExtractor.getPackageJsonScripts(targetPath);
     const claudeMd = this.claudeMdGenerator.generate(
       projectName,
       guidelines,
-      skillResult.skills,
+      allSkills,
       agentResult.agents,
-      packageScripts
+      packageJson
     );
 
     return {
-      skills: skillResult.skills,
+      skills: allSkills,
       agents: agentResult.agents,
       claudeMd
     };
+  }
+
+  /**
+   * Generate tech-stack-specific skills (security, code quality, etc.)
+   */
+  private async generateTechStackSkills(
+    client: IProviderClient,
+    techProfile: TechProfile,
+    guidelines: ReturnType<GuidelineExtractor['readGuidelines']>,
+    packageJson: Record<string, any>,
+    onProgress?: (message: string) => void
+  ): Promise<GeneratedSkill[]> {
+    try {
+      // Create registry with default generators (security, code quality)
+      const registry = createDefaultTechStackSkillRegistry();
+      const orchestrator = new TechStackSkillOrchestrator(registry, this.logger);
+
+      // Generate applicable tech-stack skills
+      const techStackSkills = await orchestrator.generateApplicableSkills(
+        client,
+        techProfile,
+        guidelines,
+        packageJson
+      );
+
+      // Convert to GeneratedSkill format
+      const convertedSkills: GeneratedSkill[] = techStackSkills.map((skill) => ({
+        name: skill.metadata.name,
+        fileName: skill.filename,
+        content: skill.content,
+        referencedGuidelines: [], // Tech-stack skills reference guidelines within content
+      }));
+
+      if (convertedSkills.length > 0) {
+        this.progress(
+          onProgress,
+          `✓ Generated ${convertedSkills.length} tech-stack skill(s): ${convertedSkills.map((s) => s.name).join(', ')}`
+        );
+      } else {
+        this.progress(
+          onProgress,
+          'No tech-stack-specific skills applicable to this project'
+        );
+      }
+
+      return convertedSkills;
+    } catch (error) {
+      this.logger.error('Failed to generate tech-stack skills, continuing without them', error);
+      return []; // Don't fail the entire workflow if tech-stack skills fail
+    }
   }
 
   /**

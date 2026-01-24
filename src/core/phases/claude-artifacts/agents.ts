@@ -3,7 +3,7 @@
  */
 
 import type { IProviderClient } from '@/providers/types';
-import type { ExtractedRule, GeneratedGuideline } from '@/types';
+import type { ExtractedRule, GeneratedGuideline, TechProfile } from '@/types';
 import { AGENT_SYSTEM_PROMPT, AGENT_USER_PROMPT } from './prompts';
 
 export interface GeneratedAgent {
@@ -71,13 +71,43 @@ export function identifyAgents(
 }
 
 /**
+ * Build tech stack summary for agent prompt
+ */
+function buildTechStackSummary(techProfile: TechProfile): string {
+  const parts: string[] = [];
+
+  if (techProfile.stack.languages && techProfile.stack.languages.length > 0) {
+    parts.push(`**Languages**: ${techProfile.stack.languages.join(', ')}`);
+  }
+
+  if (techProfile.stack.frameworks && techProfile.stack.frameworks.length > 0) {
+    parts.push(`**Frameworks**: ${techProfile.stack.frameworks.join(', ')}`);
+  }
+
+  if (techProfile.stack.testingFrameworks && techProfile.stack.testingFrameworks.length > 0) {
+    parts.push(`**Testing**: ${techProfile.stack.testingFrameworks.join(', ')}`);
+  }
+
+  if (techProfile.stack.buildTools && techProfile.stack.buildTools.length > 0) {
+    parts.push(`**Build Tools**: ${techProfile.stack.buildTools.join(', ')}`);
+  }
+
+  if (techProfile.stack.linters && techProfile.stack.linters.length > 0) {
+    parts.push(`**Linters**: ${techProfile.stack.linters.join(', ')}`);
+  }
+
+  return parts.length > 0 ? parts.join('\n') : 'No tech stack information available';
+}
+
+/**
  * Generate a single agent
  */
 export async function generateAgent(
   client: IProviderClient,
   agentName: string,
   rule: ExtractedRule,
-  guidelineReference: string
+  guidelineReference: string,
+  techProfile: TechProfile
 ): Promise<GeneratedAgent> {
   // Extract examples from rule
   const examples = [
@@ -86,13 +116,16 @@ export async function generateAgent(
     rule.example || ''
   ].filter(Boolean).join('\n\n');
 
+  const techStackSummary = buildTechStackSummary(techProfile);
+
   const response = await client.sendMessage(
     AGENT_SYSTEM_PROMPT,
     AGENT_USER_PROMPT(
       agentName,
       rule.description,
       guidelineReference,
-      examples
+      examples,
+      techStackSummary
     )
   );
 
@@ -116,6 +149,7 @@ export async function generateAllAgents(
   client: IProviderClient,
   rules: ExtractedRule[],
   guidelines: GeneratedGuideline[],
+  techProfile: TechProfile,
   maxAgents: number = 10,
   onProgress?: (current: number, total: number, name: string) => void
 ): Promise<GeneratedAgent[]> {
@@ -136,7 +170,8 @@ export async function generateAllAgents(
       client,
       agent.name,
       agent.rule,
-      agent.guideline
+      agent.guideline,
+      techProfile
     );
 
     results.push(generated);

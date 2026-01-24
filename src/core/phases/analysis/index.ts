@@ -98,7 +98,7 @@ export async function runAnalysisPhase(
       spinner.text = `Sampling files from ${project.name}...`;
 
       // Get file patterns based on project type
-      const patterns = getFilePatterns(project.type);
+      const patterns = getFilePatterns(project.type, techProfile.stack.testingFrameworks);
       
       for (const pattern of patterns) {
         const files = await glob(pattern, {
@@ -141,6 +141,7 @@ export async function runAnalysisPhase(
       'Import Patterns': patternReport.importPatterns?.length || 0,
       'Naming Conventions': patternReport.namingConventions?.length || 0,
       'Architecture Patterns': patternReport.architecturePatterns?.length || 0,
+      'Testing Patterns': patternReport.testingPatterns?.length || 0,
     });
 
     return {
@@ -159,19 +160,43 @@ export async function runAnalysisPhase(
   }
 }
 
-function getFilePatterns(projectType: string): string[] {
+function getFilePatterns(projectType: string, testingFrameworks?: string[]): string[] {
   const basePatterns = ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'];
-  
+
+  let patterns: string[];
   switch (projectType) {
     case 'backend':
-      return ['**/*.ts', '**/routes/**/*.ts', '**/services/**/*.ts', '**/repositories/**/*.ts'];
+      patterns = ['**/*.ts', '**/routes/**/*.ts', '**/services/**/*.ts', '**/repositories/**/*.ts'];
+      break;
     case 'frontend':
-      return ['**/*.tsx', '**/components/**/*.tsx', '**/screens/**/*.tsx', '**/hooks/**/*.ts'];
+      patterns = ['**/*.tsx', '**/components/**/*.tsx', '**/screens/**/*.tsx', '**/hooks/**/*.ts'];
+      break;
     case 'mobile':
-      return ['**/*.tsx', '**/components/**/*.tsx', '**/screens/**/*.tsx'];
+      patterns = ['**/*.tsx', '**/components/**/*.tsx', '**/screens/**/*.tsx'];
+      break;
     default:
-      return basePatterns;
+      patterns = basePatterns;
   }
+
+  // Add test file patterns if testing frameworks are detected
+  if (testingFrameworks && testingFrameworks.length > 0) {
+    patterns.push(
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.test.js',
+      '**/*.test.jsx',
+      '**/*.spec.ts',
+      '**/*.spec.tsx',
+      '**/*.spec.js',
+      '**/*.spec.jsx',
+      '**/tests/**/*.ts',
+      '**/tests/**/*.tsx',
+      '**/__tests__/**/*.ts',
+      '**/__tests__/**/*.tsx'
+    );
+  }
+
+  return patterns;
 }
 
 export { runAnalysisPhase as default };

@@ -3,7 +3,7 @@
  * Handles loading and saving provider configuration
  */
 
-import { injectable, inject } from 'inversify';
+import { injectable, inject, unmanaged } from 'inversify';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { TYPES } from '@/di/identifiers';
@@ -20,7 +20,7 @@ export class ProviderConfigManager {
 
   constructor(
     @inject(TYPES.ILogger) logger: ILogger,
-    envPath?: string
+    @unmanaged() envPath?: string
   ) {
     this.logger = logger;
     this.envPath = envPath || join(process.cwd(), '.env');
@@ -76,9 +76,14 @@ export class ProviderConfigManager {
    */
   loadFromEnvironment(): ProviderConfig | null {
     const provider = process.env.AI_PROVIDER as ProviderType | undefined;
-    const apiKey = provider === ProviderType.ANTHROPIC
-      ? process.env.ANTHROPIC_API_KEY
-      : process.env.GROQ_API_KEY;
+
+    // Support both provider-specific keys and generic AI_API_KEY
+    let apiKey: string | undefined;
+    if (provider === ProviderType.ANTHROPIC) {
+      apiKey = process.env.ANTHROPIC_API_KEY || process.env.AI_API_KEY;
+    } else if (provider === ProviderType.GROQ) {
+      apiKey = process.env.GROQ_API_KEY || process.env.AI_API_KEY;
+    }
 
     if (!provider || !apiKey) {
       return null;
@@ -124,7 +129,14 @@ export class ProviderConfigManager {
    */
   private buildConfigFromEnvMap(envMap: Map<string, string>): ProviderConfig | null {
     const provider = envMap.get('AI_PROVIDER') as ProviderType | undefined;
-    const apiKey = envMap.get('ANTHROPIC_API_KEY') || envMap.get('GROQ_API_KEY') || '';
+
+    // Support both provider-specific keys and generic AI_API_KEY
+    let apiKey: string | undefined;
+    if (provider === ProviderType.ANTHROPIC) {
+      apiKey = envMap.get('ANTHROPIC_API_KEY') || envMap.get('AI_API_KEY');
+    } else if (provider === ProviderType.GROQ) {
+      apiKey = envMap.get('GROQ_API_KEY') || envMap.get('AI_API_KEY');
+    }
 
     if (!provider || !apiKey) {
       return null;

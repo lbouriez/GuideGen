@@ -214,12 +214,19 @@ async function processDirectoryItems(
   prefix: string,
   lines: string[],
   processedDirs: Set<string>,
-  buildTreeFn: (path: string, depth: number, prefix: string) => Promise<void>
+  buildTreeFn: (path: string, depth: number, prefix: string) => Promise<void>,
+  directoriesOnly: boolean = false
 ): Promise<void> {
   const filteredItems = filterIgnoredItems(items, depth);
-  const sortedItems = sortTreeItems(filteredItems);
+
+  // Filter to directories only if requested
+  const itemsToShow = directoriesOnly
+    ? filteredItems.filter(item => item.isDirectory())
+    : filteredItems;
+
+  const sortedItems = sortTreeItems(itemsToShow);
   const limitedItems = sortedItems.slice(0, maxItemsPerDir);
-  const hasMore = filteredItems.length > maxItemsPerDir;
+  const hasMore = itemsToShow.length > maxItemsPerDir;
 
   for (let i = 0; i < limitedItems.length; i++) {
     const item = limitedItems[i];
@@ -234,18 +241,24 @@ async function processDirectoryItems(
   }
 
   if (hasMore) {
-    lines.push(`${prefix}└── ... (${filteredItems.length - maxItemsPerDir} more items)`);
+    lines.push(`${prefix}└── ... (${itemsToShow.length - maxItemsPerDir} more items)`);
   }
 }
 
 /**
  * Generate a tree structure visualization of the project
  * Limits depth and number of items to keep it readable
+ *
+ * @param rootPath - Path to the root directory
+ * @param maxDepth - Maximum depth to traverse
+ * @param maxItemsPerDir - Maximum items to show per directory
+ * @param directoriesOnly - If true, only show directories (no files)
  */
 export async function generateProjectTree(
   rootPath: string,
   maxDepth: number = 3,
-  maxItemsPerDir: number = 10
+  maxItemsPerDir: number = 10,
+  directoriesOnly: boolean = false
 ): Promise<string> {
   const lines: string[] = [];
   const processedDirs = new Set<string>();
@@ -266,7 +279,8 @@ export async function generateProjectTree(
         prefix,
         lines,
         processedDirs,
-        buildTree
+        buildTree,
+        directoriesOnly
       );
     } catch (error) {
       // Silently skip directories we can't read

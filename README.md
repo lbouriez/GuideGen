@@ -6,10 +6,9 @@
 
 - **.guidelines/** - Comprehensive domain-specific coding guidelines with real code examples
 - **Index files** - Navigation structure for easy discovery
-- **.claude/skills/** - Workflow automation skills
+- **.claude/skills/** - Workflow automation skills (including auto-generated security and code quality skills)
 - **.claude/agents/** - Rule enforcement agents
 - **CLAUDE.md** - Quick reference for Claude Code
-- **ANALYSIS.md** - Detailed codebase analysis report
 
 ## Why GuideGen?
 
@@ -59,9 +58,9 @@ npm run setup -- /path/to/your/project
 
 **Output:**
 ```
-✓ Generated 8 guidelines
+✓ Generated 10 guidelines
 ✓ Generated 3 indexes
-✓ Generated 1 skill
+✓ Generated 3 skills (1 workflow + 2 auto-generated)
 ✓ Generated 1 agent
 ✓ Created CLAUDE.md
 ```
@@ -209,12 +208,14 @@ Creates navigation structure:
 ### Phase 5: Claude Artifacts
 
 Generates skills and agents:
-- **Skills** - Workflow automation (references guidelines)
+- **Workflow Skills** - Step-by-step guides (from guidelines)
+- **Tech-Stack Skills** - Auto-generated security and code quality checklists (based on detected tech stack)
 - **Agents** - Rule enforcement (critical rules only)
 - **CLAUDE.md** - Quick reference file
 
 **Smart features:**
 - ✅ Adaptive limits based on project complexity
+- ✅ Auto-detects applicable security/quality concerns (Express → SQL injection prevention, TypeScript → type safety checks)
 - ✅ Quality over quantity
 - ✅ Skills reference guidelines (no duplication)
 - ✅ **Intelligent merging** preserves customizations
@@ -240,11 +241,12 @@ your-project/
 │       └── organization.md
 ├── .claude/
 │   ├── skills/
-│   │   └── browse-guidelines.md
+│   │   ├── browse-guidelines.md
+│   │   ├── typescript-application-security-review.md    # Auto-generated
+│   │   └── typescript-code-quality-review.md            # Auto-generated
 │   └── agents/
 │       └── critical-rules-enforcer.md
-├── CLAUDE.md                    # Quick reference
-└── ANALYSIS.md                  # Analysis report
+└── CLAUDE.md                    # Quick reference
 ```
 
 ## Intelligent Update Mode
@@ -339,6 +341,21 @@ npm run setup -- --force-setup
 
 ## Smart Features
 
+### 🔒 Auto-Generated Security & Code Quality Skills
+
+GuideGen automatically detects and generates tech-stack-specific skills:
+- **Security Review Skills** - Tailored to your frameworks (Express → SQL injection, React → XSS)
+- **Code Quality Skills** - Language-specific best practices (TypeScript → type safety, Python → PEP 8)
+- **AI-Powered Detection** - Uses AI to determine which skills are applicable to your project
+- **Preventive Checklists** - Catch vulnerabilities before commit, not after
+- **Always Up-to-Date** - Reflects latest vulnerabilities from AI model's knowledge
+
+**Example:** TypeScript + Express project automatically gets:
+- SQL/NoSQL injection prevention checklist
+- TypeScript type safety verification
+- Authentication best practices
+- Error handling security
+
 ### 🤖 AI-Powered Merging
 
 When regenerating:
@@ -358,9 +375,10 @@ Before writing:
 ### 📊 Adaptive Generation
 
 Scales with complexity:
-- Small projects get focused essentials
-- Large monorepos get comprehensive coverage
-- Quality always prioritized
+- Small projects get focused essentials (3-6 guidelines)
+- Medium projects get balanced coverage (5-10 guidelines)
+- Large monorepos get comprehensive documentation (8-15 guidelines)
+- Quality always prioritized over quantity
 
 ## Example Output
 
@@ -587,6 +605,7 @@ npm run guidelines  # Will prompt for update mode
 
 - [UPDATING.md](./UPDATING.md) - Complete update workflow guide
 - [CLAUDE.md](./CLAUDE.md) - Development guidelines for this project
+- [Tech-Stack Skills Architecture](./src/core/phases/claude-artifacts/tech-stack-skills/README.md) - Auto-generated security & code quality skills (for contributors)
 
 ## Contributing
 
@@ -624,6 +643,7 @@ npm start -- setup /path/to/test/project
 2. **New workflow** - Add to `src/core/workflows/`
 3. **New provider** - Implement `IProviderClient` interface
 4. **New service** - Use `@injectable()` decorator and add to DI container
+5. **New tech-stack skill** - See [Tech-Stack Skills Architecture](./src/core/phases/claude-artifacts/tech-stack-skills/README.md) for extensibility guide
 
 All code must:
 - ✅ Have zero `any` types

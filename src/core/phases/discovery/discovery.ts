@@ -42,6 +42,119 @@ async function readConfigFiles(
 }
 
 /**
+ * Detect test-related patterns in the codebase
+ * This helps the AI identify testing frameworks without hardcoding specific tools
+ */
+function detectTestPatterns(
+  structure: FolderStructure,
+  configContents: Array<{ path: string; content: string }>
+): {
+  testFolders: string[];
+  testFiles: string[];
+  testScripts: Record<string, string>;
+  testDependencies: string[];
+} {
+  const testFolders: string[] = [];
+  const testFiles: string[] = [];
+  const testScripts: Record<string, string> = {};
+  const testDependencies: string[] = [];
+
+  // Detect test folders using common patterns
+  // Normalize paths to use forward slashes for cross-platform compatibility
+  const testFolderPatterns = [
+    /^tests?\//,           // tests/ or test/
+    /__tests__\//,         // __tests__/
+    /\/tests?\//,          // any/path/tests/
+    /\/__tests__\//,       // any/path/__tests__/
+    /\.test\//,            // .test/
+    /e2e\//,               // e2e/
+    /integration\//,       // integration/
+    /^tests?$/,            // tests or test (root level)
+    /^__tests__$/,         // __tests__ (root level)
+  ];
+
+  for (const dir of structure.directories) {
+    const normalizedDir = dir.replace(/\\/g, '/');
+    if (testFolderPatterns.some(pattern => pattern.test(normalizedDir))) {
+      testFolders.push(dir);
+    }
+  }
+
+  // Detect test files using common patterns
+  const testFilePatterns = [
+    /\.test\.(ts|js|tsx|jsx)$/,
+    /\.spec\.(ts|js|tsx|jsx)$/,
+    /_test\.(ts|js|tsx|jsx)$/,
+    /\.e2e\.(ts|js|tsx|jsx)$/,
+  ];
+
+  const allFiles = [...structure.keyFiles, ...structure.configFiles];
+  for (const file of allFiles) {
+    const normalizedFile = file.replace(/\\/g, '/');
+    if (testFilePatterns.some(pattern => pattern.test(normalizedFile))) {
+      testFiles.push(file);
+    }
+  }
+
+  // Extract test-related scripts and dependencies from package.json
+  const packageJson = configContents.find(f => f.path === 'package.json');
+  if (packageJson) {
+    try {
+      const pkg = JSON.parse(packageJson.content);
+
+      // Extract test-related scripts
+      if (pkg.scripts) {
+        for (const [key, value] of Object.entries(pkg.scripts)) {
+          if (key.includes('test') || key.includes('spec') ||
+              key.includes('coverage') || key.includes('e2e')) {
+            testScripts[key] = value as string;
+          }
+        }
+      }
+
+      // Extract test-related dependencies (both dev and regular)
+      const allDeps = {
+        ...pkg.dependencies,
+        ...pkg.devDependencies
+      };
+
+      // Common testing framework patterns
+      const testDepPatterns = [
+        /vitest/i,
+        /jest/i,
+        /mocha/i,
+        /jasmine/i,
+        /karma/i,
+        /playwright/i,
+        /cypress/i,
+        /puppeteer/i,
+        /@testing-library/i,
+        /test/i,
+        /spec/i,
+        /chai/i,
+        /sinon/i,
+        /ava/i,
+      ];
+
+      for (const [dep, version] of Object.entries(allDeps)) {
+        if (testDepPatterns.some(pattern => pattern.test(dep))) {
+          testDependencies.push(`${dep}@${version}`);
+        }
+      }
+    } catch (error) {
+      // Ignore JSON parse errors
+    }
+  }
+
+  return {
+    testFolders,
+    testFiles: testFiles.slice(0, 10), // Limit to first 10 to avoid clutter
+    testScripts,
+    testDependencies
+  };
+}
+
+/**
  * Get the display name for the current AI provider
  */
 function getProviderDisplayName(providerManager: ProviderManager): string {
@@ -56,12 +169,17 @@ function getProviderDisplayName(providerManager: ProviderManager): string {
 async function analyzeWithAI(
   depth: AnalysisDepth,
   folderTree: string,
-  configContents: Array<{ path: string; content: string }>
+  configContents: Array<{ path: string; content: string }>,
+  structure: FolderStructure
 ): Promise<TechProfile> {
   const client = await createProviderClient(depth);
+
+  // Detect test patterns to highlight in the prompt
+  const testPatterns = detectTestPatterns(structure, configContents);
+
   return client.completeWithJson<TechProfile>(
     DISCOVERY_SYSTEM_PROMPT,
-    DISCOVERY_USER_PROMPT(folderTree, configContents)
+    DISCOVERY_USER_PROMPT(folderTree, configContents, testPatterns)
   );
 }
 
@@ -167,7 +285,7 @@ export async function runDiscoveryPhase(
     spinner.text = `Analyzing tech stack with ${providerName}...`;
 
     // Use AI provider to analyze
-    const techProfile = await analyzeWithAI(depth, folderTree, configContents);
+    const techProfile = await analyzeWithAI(depth, folderTree, configContents, structure);
 
     // Ensure structure is populated
     techProfile.structure = {

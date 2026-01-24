@@ -34,10 +34,11 @@ export class ArtifactFileManager {
    */
   artifactsExist(targetPath: string): boolean {
     const claudePath = path.join(targetPath, '.claude');
+    const claudeMdPath = path.join(targetPath, 'CLAUDE.md');
     return fs.existsSync(claudePath) &&
            (fs.existsSync(path.join(claudePath, 'skills')) ||
             fs.existsSync(path.join(claudePath, 'agents')) ||
-            fs.existsSync(path.join(targetPath, 'CLAUDE.md')));
+            fs.existsSync(claudeMdPath));
   }
 
   /**
@@ -50,10 +51,18 @@ export class ArtifactFileManager {
       this.logger.debug('Deleted .claude directory');
     }
 
+    // Delete CLAUDE.md from root
     const claudeMdPath = path.join(targetPath, 'CLAUDE.md');
     if (fs.existsSync(claudeMdPath)) {
       fs.unlinkSync(claudeMdPath);
-      this.logger.debug('Deleted CLAUDE.md');
+      this.logger.debug('Deleted CLAUDE.md from root');
+    }
+
+    // Also delete from old location (.claude/) for backwards compatibility
+    const oldClaudeMdPath = path.join(targetPath, '.claude', 'CLAUDE.md');
+    if (fs.existsSync(oldClaudeMdPath)) {
+      fs.unlinkSync(oldClaudeMdPath);
+      this.logger.debug('Deleted old CLAUDE.md from .claude/');
     }
   }
 
@@ -87,11 +96,16 @@ export class ArtifactFileManager {
       this.logger.debug(`Read ${agents.size} existing agents`);
     }
 
-    // Read CLAUDE.md
+    // Read CLAUDE.md (check root first, then .claude/ for backwards compatibility)
     const claudeMdPath = path.join(targetPath, 'CLAUDE.md');
+    const oldClaudeMdPath = path.join(targetPath, '.claude', 'CLAUDE.md');
+
     if (fs.existsSync(claudeMdPath)) {
       claudeMd = fs.readFileSync(claudeMdPath, 'utf-8');
-      this.logger.debug('Read existing CLAUDE.md');
+      this.logger.debug('Read existing CLAUDE.md from root');
+    } else if (fs.existsSync(oldClaudeMdPath)) {
+      claudeMd = fs.readFileSync(oldClaudeMdPath, 'utf-8');
+      this.logger.debug('Read existing CLAUDE.md from .claude/ (old location)');
     }
 
     return { skills, agents, claudeMd };
@@ -128,10 +142,10 @@ export class ArtifactFileManager {
     }
     this.logger.debug(`Wrote ${agents.length} agents`);
 
-    // Write CLAUDE.md
+    // Write CLAUDE.md to root directory
     const finalClaudeMd = mergedContent?.claudeMd || claudeMdContent;
     fs.writeFileSync(path.join(targetPath, 'CLAUDE.md'), finalClaudeMd, 'utf-8');
-    this.logger.debug('Wrote CLAUDE.md');
+    this.logger.debug('Wrote CLAUDE.md to root');
   }
 
   /**
