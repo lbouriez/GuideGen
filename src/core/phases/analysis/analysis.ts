@@ -9,7 +9,9 @@ import type {
   PatternReport,
   PhaseResult,
   AnalysisDepth,
+  CodePattern,
 } from '@/types';
+import type { IProviderClient } from '@/providers/types';
 import { createProviderClient } from '@/providers/manager';
 import {
   createSpinner,
@@ -22,13 +24,166 @@ import {
   ANALYSIS_SYSTEM_PROMPT,
   ANALYSIS_USER_PROMPT,
 } from './prompts';
-import { ToolRegistry } from '../../utils';
 import type { SelectedFiles, FileSelectionCriteria, ConcatenatedFiles } from '../../utils';
+import type { IToolRegistry } from '../../utils/registry';
 
+/**
+ * Select files for analysis using AI-powered selection
+ */
+async function selectFilesForAnalysis(
+  toolRegistry: IToolRegistry,
+  client: IProviderClient,
+  techProfile: TechProfile,
+  depth: AnalysisDepth,
+  debug: boolean
+): Promise<SelectedFiles> {
+  const fileSelectionCriteria: FileSelectionCriteria = {
+    projectStructure: techProfile.structure!,
+    techProfile,
+    depth,
+  };
+
+  const result = await toolRegistry.executeTool<FileSelectionCriteria, SelectedFiles>(
+    'file_selection',
+    fileSelectionCriteria,
+    client
+  );
+
+  if (!result.success || !result.data) {
+    throw new Error(`File selection failed: ${result.error}`);
+  }
+
+  if (debug) {
+    printDebugFileSelection(result.data);
+  }
+
+  return result.data;
+}
+
+/**
+ * Print debug information about file selection
+ */
+function printDebugFileSelection(selectedFiles: SelectedFiles): void {
+  printInfo(`[DEBUG] AI selected ${selectedFiles.files.length} files for analysis:`);
+  selectedFiles.files.forEach(file => {
+    const priority = typeof file.priority === 'string' ? file.priority.toUpperCase() : 'UNKNOWN';
+    printInfo(`[DEBUG]   ${priority}: ${file.path} - ${file.reason}`);
+  });
+  printInfo(`[DEBUG] Estimated total tokens: ${selectedFiles.totalEstimatedTokens}`);
+}
+
+/**
+ * Read and concatenate selected files
+ */
+async function readSelectedFiles(
+  toolRegistry: IToolRegistry,
+  client: IProviderClient,
+  targetPath: string,
+  selectedFiles: SelectedFiles,
+  debug: boolean
+): Promise<ConcatenatedFiles> {
+  const filePaths = selectedFiles.files.map(f => join(targetPath, f.path));
+
+  const result = await toolRegistry.executeTool<string[], ConcatenatedFiles>(
+    'file_reading',
+    filePaths,
+    client
+  );
+
+  if (!result.success || !result.data) {
+    throw new Error(`File reading failed: ${result.error}`);
+  }
+
+  if (debug) {
+    printInfo(`[DEBUG] Successfully read ${result.data.fileCount} files`);
+    printInfo(`[DEBUG] Total content size: ${result.data.totalSize} characters`);
+  }
+
+  return result.data;
+}
+
+/**
+ * Filter patterns based on frequency threshold
+ * For large projects, remove patterns that appear in <5% of analyzed files
+ */
+function filterLowFrequencyPatterns(
+  patternReport: PatternReport,
+  totalFiles: number
+): PatternReport {
+  // Only apply filtering for larger projects (50+ files)
+  if (totalFiles < 50) {
+    return patternReport;
+  }
+
+  // Calculate minimum occurrence threshold (5% of files, minimum 3 files)
+  const minOccurrences = Math.max(3, Math.ceil(totalFiles * 0.05));
+
+  const filterPatterns = (patterns?: CodePattern[]): CodePattern[] | undefined => {
+    if (!patterns || patterns.length === 0) return patterns;
+
+    return patterns.filter(pattern => {
+      const occurrences = pattern.files?.length || 0;
+
+      // Keep if frequency is 'always' (regardless of file count)
+      if (pattern.frequency === 'always') return true;
+
+      // Keep if frequency is 'common' (regardless of file count)
+      if (pattern.frequency === 'common') return true;
+
+      // For 'occasional' patterns, check occurrence threshold
+      if (pattern.frequency === 'occasional') {
+        return occurrences >= minOccurrences;
+      }
+
+      return true;
+    });
+  };
+
+  return {
+    ...patternReport,
+    importPatterns: filterPatterns(patternReport.importPatterns),
+    namingConventions: filterPatterns(patternReport.namingConventions),
+    architecturePatterns: filterPatterns(patternReport.architecturePatterns),
+    stateManagement: filterPatterns(patternReport.stateManagement),
+    errorHandling: filterPatterns(patternReport.errorHandling),
+    loggingPatterns: filterPatterns(patternReport.loggingPatterns),
+    testingPatterns: filterPatterns(patternReport.testingPatterns),
+  };
+}
+
+/**
+ * Analyze patterns using AI
+ */
+async function analyzePatterns(
+  client: IProviderClient,
+  techProfile: TechProfile,
+  fileContent: string,
+  totalFiles: number
+): Promise<PatternReport> {
+  const projectType = determineProjectType(techProfile);
+
+  const rawReport = await client.completeWithJson<PatternReport>(
+    ANALYSIS_SYSTEM_PROMPT,
+    ANALYSIS_USER_PROMPT(JSON.stringify(techProfile, null, 2), fileContent, projectType)
+  );
+
+  // Filter out low-frequency patterns for large projects
+  return filterLowFrequencyPatterns(rawReport, totalFiles);
+}
+
+/**
+ * Run the analysis phase
+ * @param targetPath - Path to analyze
+ * @param techProfile - Technology profile from discovery
+ * @param depth - Analysis depth
+ * @param toolRegistry - Tool registry for file operations (injected)
+ * @param debug - Enable debug output
+ */
 export async function runAnalysisPhase(
   targetPath: string,
   techProfile: TechProfile,
   depth: AnalysisDepth,
+  toolRegistry: IToolRegistry,
   debug: boolean = false
 ): Promise<PhaseResult<PatternReport>> {
   const spinner = createSpinner('Analyzing codebase with AI assistance...');
@@ -36,82 +191,37 @@ export async function runAnalysisPhase(
 
   try {
     const client = await createProviderClient(depth);
-    const toolRegistry = ToolRegistry.getInstance();
 
-    // Step 1: Use AI to intelligently select files
+    // Step 1: Select files for analysis
     spinner.text = 'Selecting most relevant files for analysis...';
-
-    const fileSelectionCriteria: FileSelectionCriteria = {
-      projectStructure: techProfile.structure!,
-      techProfile,
-      depth,
-    };
-
-    const fileSelectionResult = await toolRegistry.executeTool<FileSelectionCriteria, SelectedFiles>(
-      'file_selection',
-      fileSelectionCriteria,
-      client
+    const selectedFiles = await selectFilesForAnalysis(
+      toolRegistry, client, techProfile, depth, debug
     );
 
-    if (!fileSelectionResult.success || !fileSelectionResult.data) {
-      throw new Error(`File selection failed: ${fileSelectionResult.error}`);
-    }
-
-    const selectedFiles = fileSelectionResult.data;
-
-    if (debug) {
-      printInfo(`[DEBUG] AI selected ${selectedFiles.files.length} files for analysis:`);
-      selectedFiles.files.forEach(file => {
-        const priority = typeof file.priority === 'string' ? file.priority.toUpperCase() : 'UNKNOWN';
-        printInfo(`[DEBUG]   ${priority}: ${file.path} - ${file.reason}`);
-      });
-      printInfo(`[DEBUG] Estimated total tokens: ${selectedFiles.totalEstimatedTokens}`);
-    }
-
-    // Step 2: Read and concatenate selected files
+    // Step 2: Read selected files
     spinner.text = `Reading ${selectedFiles.files.length} selected files...`;
-
-    const filePaths = selectedFiles.files.map(f => join(targetPath, f.path));
-    const fileReadingResult = await toolRegistry.executeTool<string[], ConcatenatedFiles>(
-      'file_reading',
-      filePaths,
-      client
+    const concatenatedFiles = await readSelectedFiles(
+      toolRegistry, client, targetPath, selectedFiles, debug
     );
 
-    if (!fileReadingResult.success || !fileReadingResult.data) {
-      throw new Error(`File reading failed: ${fileReadingResult.error}`);
-    }
-
-    const concatenatedFiles = fileReadingResult.data;
-
-    if (debug) {
-      printInfo(`[DEBUG] Successfully read ${concatenatedFiles.fileCount} files`);
-      printInfo(`[DEBUG] Total content size: ${concatenatedFiles.totalSize} characters`);
-    }
-
-    // Step 3: Analyze patterns using the comprehensive file content
+    // Step 3: Analyze patterns
     spinner.text = 'Analyzing code patterns and architecture...';
-
-    // Determine project type for better AI guidance
-    const projectType = determineProjectType(techProfile);
-
-    const patternReport = await client.completeWithJson<PatternReport>(
-      ANALYSIS_SYSTEM_PROMPT,
-      ANALYSIS_USER_PROMPT(JSON.stringify(techProfile, null, 2), concatenatedFiles.content, projectType)
+    const patternReport = await analyzePatterns(
+      client,
+      techProfile,
+      concatenatedFiles.content,
+      concatenatedFiles.fileCount
     );
 
     spinner.stop();
     printSuccess('Analysis phase complete');
-
-    // Print summary
     printPatternSummary(patternReport);
 
     return {
       success: true,
       data: patternReport,
       humanReviewRequired: true,
-      reviewPrompt:
-        'Please review the detected patterns. Do these look accurate? (y/n)',
+      reviewPrompt: 'Please review the detected patterns. Do these look accurate? (y/n)',
     };
   } catch (error) {
     spinner.stop();

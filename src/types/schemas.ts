@@ -173,18 +173,51 @@ export function parseWithSchema<T>(
 }
 
 /**
+ * Sanitize JSON string by escaping control characters
+ * Fixes AI responses that contain unescaped newlines, tabs, etc.
+ */
+function sanitizeJsonString(jsonString: string): string {
+  // This is a heuristic approach - we need to escape control characters
+  // ONLY inside string values, not in the JSON structure itself
+
+  // Strategy: Find all string values and escape control characters within them
+  // Use a regex to match string values in JSON
+  return jsonString.replace(
+    /"([^"]*(?:\\.[^"]*)*)"/g,
+    (match, content) => {
+      // Skip if this is a JSON key (followed by colon)
+      const nextChar = jsonString[jsonString.indexOf(match) + match.length];
+      if (nextChar === ':') {
+        return match; // Don't sanitize keys
+      }
+
+      // Escape control characters in string values
+      const sanitized = content
+        .replace(/\\/g, '\\\\')  // Escape backslashes first
+        .replace(/\n/g, '\\n')   // Escape newlines
+        .replace(/\r/g, '\\r')   // Escape carriage returns
+        .replace(/\t/g, '\\t')   // Escape tabs
+        .replace(/\f/g, '\\f')   // Escape form feeds
+        .replace(/\b/g, '\\b');  // Escape backspaces
+
+      return `"${sanitized}"`;
+    }
+  );
+}
+
+/**
  * Extract JSON from AI response (handles markdown code blocks)
  */
 export function extractJsonFromResponse(response: string): string | null {
   // Try to find JSON in markdown code blocks first
   const codeBlockMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
   if (codeBlockMatch) {
-    return codeBlockMatch[1];
+    return sanitizeJsonString(codeBlockMatch[1]);
   }
 
   // Fall back to finding raw JSON object
   const jsonMatch = response.match(/\{[\s\S]*\}/);
-  return jsonMatch ? jsonMatch[0] : null;
+  return jsonMatch ? sanitizeJsonString(jsonMatch[0]) : null;
 }
 
 /**

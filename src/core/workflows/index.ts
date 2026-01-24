@@ -11,36 +11,79 @@ export { runSetupWorkflow } from './setup';
 // Re-export phases for direct access
 export { runDiscoveryPhase } from '../phases/discovery';
 export { runAnalysisPhase } from '../phases/analysis';
-export { runExtractionPhase } from '../phases/extraction';
-export { runGenerationPhase } from '../phases/generation';
-export { runSuggestPhase } from '../phases/suggest';
 
 // CLI-friendly wrapper functions
 import { resolve } from 'path';
 import type { AnalysisDepth } from '../../types';
+import type { ILogger } from '../../interfaces/services/ILogger';
 import { ProviderManager } from '../../providers/manager';
 import { runGuidelinesWorkflow } from './guidelines-update';
 import { runIndexesWorkflow } from './indexes-update';
 import { runClaudeArtifactsWorkflow } from './claude-update';
 import { runDiscoveryPhase } from '../phases/discovery';
 import { runAnalysisPhase } from '../phases/analysis';
-import { logger } from '@/utils/logger';
+import type { ClaudeArtifactsWorkflow } from '../../workflows/claude-artifacts/ClaudeArtifactsWorkflow.js';
 
 /**
- * Wrapper for guidelines generation command
+ * Generate project-specific coding guidelines based on existing code patterns
+ *
+ * This command orchestrates the full guidelines generation workflow:
+ * 1. Discovers project tech stack and structure
+ * 2. Analyzes code patterns and conventions
+ * 3. Generates comprehensive guidelines across domains (backend, frontend, shared)
+ *
+ * @param targetPath - Absolute or relative path to the project root directory
+ * @param depth - Analysis depth level controlling AI model selection and detail
+ *                'quick' - Fast analysis with smaller models
+ *                'standard' - Balanced approach (recommended)
+ *                'thorough' - Comprehensive analysis with larger models
+ * @param skipConfirm - If true, skips user confirmation prompts
+ * @param overwrite - If true, overwrites existing guidelines without merging
+ * @param forceSetup - If true, re-runs provider configuration setup
+ * @param debug - If true, enables detailed logging for troubleshooting
+ *
+ * @throws {Error} If discovery, analysis, or generation phases fail
+ * @throws {PathTraversalError} If targetPath contains directory escape attempts
+ *
+ * @example
+ * ```typescript
+ * // Generate guidelines for current project
+ * await runGuidelinesGeneration(
+ *   process.cwd(),
+ *   'standard',
+ *   false,  // require confirmation
+ *   false,  // merge with existing
+ *   false,  // use existing provider config
+ *   false   // normal logging
+ * );
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Quick generation with debug logging
+ * await runGuidelinesGeneration(
+ *   './my-project',
+ *   'quick',
+ *   true,   // skip confirmations
+ *   false,
+ *   false,
+ *   true    // enable debug output
+ * );
+ * ```
  */
 export async function runGuidelinesGeneration(
   targetPath: string,
   depth: AnalysisDepth,
   skipConfirm: boolean,
   overwrite: boolean,
+  providerManager: ProviderManager,
+  logger: ILogger,
   forceSetup: boolean = false,
   debug: boolean = false
 ): Promise<void> {
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = ProviderManager.getInstance();
   if (forceSetup) {
     await providerManager.forceSetup();
   }
@@ -49,7 +92,7 @@ export async function runGuidelinesGeneration(
 
   // Run discovery and analysis first
   logger.info('Running discovery...');
-  const discoveryResult = await runDiscoveryPhase(resolvedPath, depth);
+  const discoveryResult = await runDiscoveryPhase(resolvedPath, depth, providerManager, logger);
   if (!discoveryResult.success) {
     throw new Error(`Discovery failed: ${discoveryResult.error}`);
   }
@@ -68,7 +111,8 @@ export async function runGuidelinesGeneration(
     discoveryResult.data,
     analysisResult.data,
     true, // interactive=true for CLI command
-    (msg) => logger.info(msg)
+    (msg) => logger.info(msg),
+    logger
   );
 
   if (!result.success) {
@@ -79,19 +123,50 @@ export async function runGuidelinesGeneration(
 }
 
 /**
- * Wrapper for index generation command
+ * Generate markdown index files for project guidelines
+ *
+ * Creates organized index files that catalog all generated guidelines,
+ * making them easily discoverable and navigable. Indexes are generated
+ * per domain (backend, frontend, shared) and include metadata about
+ * each guideline.
+ *
+ * @param targetPath - Absolute or relative path to the project root directory
+ * @param skipConfirm - If true, skips user confirmation prompts
+ * @param overwrite - If true, overwrites existing index files
+ * @param forceSetup - If true, re-runs provider configuration setup
+ * @param debug - If true, enables detailed logging for troubleshooting
+ *
+ * @throws {Error} If discovery or index generation fails
+ * @throws {PathTraversalError} If targetPath contains directory escape attempts
+ *
+ * @example
+ * ```typescript
+ * // Generate indexes for existing guidelines
+ * await runIndexGeneration(
+ *   process.cwd(),
+ *   false,  // require confirmation
+ *   false,  // merge with existing
+ *   false,  // use existing provider config
+ *   false   // normal logging
+ * );
+ * ```
+ *
+ * @remarks
+ * This command requires existing guidelines to be present in the .guidelines directory.
+ * Run `runGuidelinesGeneration()` first if guidelines don't exist yet.
  */
 export async function runIndexGeneration(
   targetPath: string,
   skipConfirm: boolean,
   overwrite: boolean,
+  providerManager: ProviderManager,
+  logger: ILogger,
   forceSetup: boolean = false,
   debug: boolean = false
 ): Promise<void> {
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = ProviderManager.getInstance();
   if (forceSetup) {
     await providerManager.forceSetup();
   }
@@ -100,7 +175,7 @@ export async function runIndexGeneration(
 
   // Run discovery to get tech profile
   logger.info('Running discovery...');
-  const discoveryResult = await runDiscoveryPhase(resolvedPath, 'standard');
+  const discoveryResult = await runDiscoveryPhase(resolvedPath, 'standard', providerManager, logger);
   if (!discoveryResult.success) {
     throw new Error(`Discovery failed: ${discoveryResult.error}`);
   }
@@ -127,20 +202,62 @@ export async function runIndexGeneration(
 }
 
 /**
- * Wrapper for Claude artifacts generation command
+ * Generate Claude Code artifacts (skills and agents) from project guidelines
+ *
+ * Creates custom Claude Code skills and agents tailored to your project's
+ * specific patterns and conventions. These artifacts help Claude Code
+ * understand and follow your project's guidelines automatically.
+ *
+ * Generated artifacts include:
+ * - Custom skills for project-specific tasks
+ * - Specialized agents for workflow automation
+ * - CLAUDE.md file with project context and references
+ *
+ * @param targetPath - Absolute or relative path to the project root directory
+ * @param depth - Analysis depth level controlling AI model selection
+ *                'quick' - Fast generation with smaller models
+ *                'standard' - Balanced approach (recommended)
+ *                'thorough' - Comprehensive generation with larger models
+ * @param skipConfirm - If true, skips user confirmation prompts
+ * @param overwrite - If true, overwrites existing artifacts
+ * @param forceSetup - If true, re-runs provider configuration setup
+ * @param debug - If true, enables detailed logging for troubleshooting
+ *
+ * @throws {Error} If discovery or artifact generation fails
+ * @throws {PathTraversalError} If targetPath contains directory escape attempts
+ *
+ * @example
+ * ```typescript
+ * // Generate Claude artifacts for current project
+ * await runClaudeGeneration(
+ *   process.cwd(),
+ *   'standard',
+ *   false,  // require confirmation
+ *   false,  // merge with existing
+ *   false,  // use existing provider config
+ *   false   // normal logging
+ * );
+ * ```
+ *
+ * @remarks
+ * This command requires existing guidelines in .guidelines directory.
+ * Run `runGuidelinesGeneration()` first if guidelines don't exist.
+ * Generated artifacts are written to .claude/ directory and CLAUDE.md file.
  */
 export async function runClaudeGeneration(
   targetPath: string,
   depth: AnalysisDepth,
   skipConfirm: boolean,
   overwrite: boolean,
+  providerManager: ProviderManager,
+  logger: ILogger,
+  workflow: ClaudeArtifactsWorkflow,
   forceSetup: boolean = false,
   debug: boolean = false
 ): Promise<void> {
   const resolvedPath = resolve(targetPath);
 
   // Initialize provider
-  const providerManager = ProviderManager.getInstance();
   if (forceSetup) {
     await providerManager.forceSetup();
   }
@@ -149,7 +266,7 @@ export async function runClaudeGeneration(
 
   // Run discovery to get tech profile
   logger.info('Running discovery...');
-  const discoveryResult = await runDiscoveryPhase(resolvedPath, depth);
+  const discoveryResult = await runDiscoveryPhase(resolvedPath, depth, providerManager, logger);
   if (!discoveryResult.success) {
     throw new Error(`Discovery failed: ${discoveryResult.error}`);
   }
@@ -160,6 +277,7 @@ export async function runClaudeGeneration(
     client,
     resolvedPath,
     discoveryResult.data,
+    workflow,
     true, // interactive=true for CLI command
     (msg) => logger.info(msg)
   );

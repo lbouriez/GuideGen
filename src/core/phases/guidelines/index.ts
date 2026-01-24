@@ -36,6 +36,7 @@ export async function runGuidelinesPhase(
       targetPath,
       projectStructure,
       techProfile,
+      undefined,
       (current, total, name) => {
         if (onProgress) {
           onProgress(`Generating guideline ${current}/${total}: ${name}`);

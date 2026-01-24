@@ -6,6 +6,7 @@
 import * as path from 'path';
 import type { IProviderClient } from '../../providers/types';
 import type { TechProfile, PatternReport, GeneratedGuideline } from '../../types';
+import type { ILogger } from '../../interfaces/services/ILogger';
 import { generateAllGuidelines } from '../phases/guidelines/generator';
 import { validateAllGuidelines, checkDuplicates } from '../phases/guidelines/validator';
 import { batchIntelligentMerge, formatChanges } from '../phases/intelligent-merge';
@@ -13,6 +14,9 @@ import { promptUpdateMode, confirmChanges } from '../../utils/interactive';
 import { transformPatterns } from '../phases/guidelines/transformer';
 import { printSuccess } from '../../utils/display';
 import { GuidelineFileService } from './services';
+import { InputValidator } from '../../validation/input-validator';
+import { extractAllMetadata } from './services/frontmatter-parser';
+import { matchGuidelinesWithAI } from './services/guideline-matcher';
 
 export interface GuidelinesWorkflowResult {
   success: boolean;
@@ -32,20 +36,25 @@ export async function runGuidelinesWorkflow(
   techProfile: TechProfile,
   patterns: PatternReport,
   interactive: boolean = true,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  logger?: ILogger
 ): Promise<GuidelinesWorkflowResult> {
   try {
+    // Validate target path before any operations
+    const validator = new InputValidator();
+    const validatedPath = validator.validatePath(targetPath);
+
     const fileService = new GuidelineFileService();
 
     // Determine update mode
-    const updateMode = await determineUpdateMode(fileService, targetPath, interactive, onProgress);
+    const updateMode = await determineUpdateMode(fileService, validatedPath, interactive, onProgress);
     if (updateMode === 'cancelled') {
       return { success: true, guidelinesGenerated: 0, mode: 'cancelled' };
     }
 
     // Apply override if requested
     if (updateMode === 'override') {
-      fileService.deleteAll(targetPath);
+      fileService.deleteAll(validatedPath);
     }
 
     // Transform patterns
@@ -65,9 +74,10 @@ export async function runGuidelinesWorkflow(
     const guidelines = await generateAllGuidelines(
       client,
       transformedPatterns,
-      targetPath,
+      validatedPath,
       techProfile.structure,
       techProfile,
+      logger,
       (current, total, name) => {
         if (onProgress) onProgress(`Generating ${current}/${total}: ${name}`);
       }
@@ -84,7 +94,7 @@ export async function runGuidelinesWorkflow(
       return await handleUpdateMode(
         client,
         fileService,
-        targetPath,
+        validatedPath,
         guidelines,
         interactive,
         onProgress
@@ -93,7 +103,7 @@ export async function runGuidelinesWorkflow(
 
     // New or override mode - write directly
     if (onProgress) onProgress('Writing guidelines...');
-    fileService.writeAll(targetPath, guidelines);
+    fileService.writeAll(validatedPath, guidelines);
 
     printSuccess(`\n✓ Guidelines created: ${guidelines.length} files`);
 
@@ -191,19 +201,78 @@ async function handleUpdateMode(
   if (onProgress) onProgress('Reading existing guidelines...');
   const existingGuidelines = fileService.readAll(targetPath);
 
-  // Prepare files for merge
-  if (onProgress) onProgress('Intelligently merging with existing content...');
-  const filesToMerge = guidelines.map(g => ({
-    fileName: `${g.domain}/${g.fileName}`,
-    existing: existingGuidelines.get(`${g.domain}/${g.fileName}`) || null,
-    generated: g.content,
-    type: 'guideline' as const
-  }));
+  // Create a console logger for merge operations (so we can see errors)
+  const consoleLogger: ILogger = {
+    debug: (msg: string) => console.log(`[DEBUG] ${msg}`),
+    log: (msg: string) => console.log(`[LOG] ${msg}`),
+    info: (msg: string) => console.log(`[INFO] ${msg}`),
+    warn: (msg: string, error?: any) => {
+      console.warn(`[WARN] ${msg}`);
+      if (error) console.warn(error);
+    },
+    error: (msg: string, error?: any) => {
+      console.error(`[ERROR] ${msg}`);
+      if (error) console.error(error);
+    }
+  };
 
-  // Perform merge
+  // Create a no-op logger for AI matching (less verbose)
+  const noOpLogger: ILogger = {
+    debug: () => {},
+    log: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {}
+  };
+
+  // Extract metadata from existing guidelines
+  if (onProgress) onProgress('Extracting metadata from existing guidelines...');
+  const existingMetadata = extractAllMetadata(existingGuidelines);
+  console.log(`[INFO] Found ${existingMetadata.length} existing guidelines with metadata`);
+
+  // Use AI to match guidelines
+  if (onProgress) onProgress('Matching guidelines with AI...');
+  const matchDecisions = await matchGuidelinesWithAI(
+    existingMetadata,
+    guidelines.map(g => g.type),
+    client,
+    noOpLogger
+  );
+
+  // Prepare files for merge based on AI decisions
+  if (onProgress) onProgress('Intelligently merging with existing content...');
+  const filesToMerge = guidelines.map(g => {
+    const decision = matchDecisions.get(g.type);
+
+    if (decision?.action === 'update' && decision.existingFileName) {
+      // Update existing guideline
+      const existing = existingGuidelines.get(decision.existingFileName);
+      console.log(`[INFO] Matched ${g.type} → ${decision.existingFileName} (${decision.reason})`);
+
+      return {
+        fileName: `${g.domain}/${g.fileName}`,
+        existing: existing || null,
+        generated: g.content,
+        type: 'guideline' as const
+      };
+    } else {
+      // Create new guideline
+      console.log(`[INFO] Creating new guideline: ${g.type} (${decision?.reason || 'no match'})`);
+
+      return {
+        fileName: `${g.domain}/${g.fileName}`,
+        existing: null,
+        generated: g.content,
+        type: 'guideline' as const
+      };
+    }
+  });
+
+  // Perform merge (use consoleLogger to see errors)
   const mergeResults = await batchIntelligentMerge(
     client,
     filesToMerge,
+    consoleLogger,  // Use console logger to see merge errors
     (current, total, fileName) => {
       if (onProgress) onProgress(`Merging ${current}/${total}: ${fileName}`);
     }

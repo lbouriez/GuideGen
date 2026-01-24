@@ -5,12 +5,17 @@
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import type { IProviderClient } from '../../providers/types';
+import type { ILogger } from '../../interfaces/services/ILogger';
 import type { AnalysisDepth } from '../../types';
+import { ProviderManager } from '../../providers/manager';
+import { ClaudeArtifactsWorkflow } from '../../workflows/claude-artifacts/ClaudeArtifactsWorkflow';
 import { runDiscoveryPhase } from '../phases/discovery';
 import { runAnalysisPhase } from '../phases/analysis';
 import { runGuidelinesWorkflow, type GuidelinesWorkflowResult } from './guidelines-update';
 import { runIndexesWorkflow, type IndexesWorkflowResult } from './indexes-update';
 import { runClaudeArtifactsWorkflow, type ClaudeArtifactsWorkflowResult } from './claude-update';
+import { InputValidator } from '../../validation/input-validator';
+import { PathTraversalError } from '../../errors';
 
 export interface SetupWorkflowResult {
   success: boolean;
@@ -26,20 +31,31 @@ export interface SetupWorkflowResult {
 
 /**
  * Check if guidelines already exist
+ * @param targetPath - Base path to check (must be validated)
+ * @param validator - InputValidator instance for path validation
  */
-function hasExistingGuidelines(targetPath: string): boolean {
-  const guidelinesPath = join(targetPath, '.guidelines');
-  if (!existsSync(guidelinesPath)) {
-    return false;
-  }
-
-  // Check if it has any markdown files (not just the root index.md)
+function hasExistingGuidelines(targetPath: string, validator: InputValidator): boolean {
   try {
+    // Validate the combined path
+    const guidelinesPath = validator.validatePath(
+      join(targetPath, '.guidelines'),
+      targetPath
+    );
+
+    if (!existsSync(guidelinesPath)) {
+      return false;
+    }
+
+    // Check if it has any markdown files (not just the root index.md)
     const files = readdirSync(guidelinesPath, { recursive: true, withFileTypes: true });
     const markdownFiles = files.filter(f => f.isFile() && f.name.endsWith('.md'));
     // If there are more than just index.md, consider it existing
     return markdownFiles.length > 1;
-  } catch {
+  } catch (error) {
+    // If validation fails or path doesn't exist, no existing guidelines
+    if (error instanceof PathTraversalError) {
+      throw error; // Re-throw security errors
+    }
     return false;
   }
 }
@@ -79,6 +95,9 @@ export async function runSetupWorkflow(
   client: IProviderClient,
   targetPath: string,
   depth: AnalysisDepth = 'standard',
+  providerManager: ProviderManager,
+  logger: ILogger,
+  workflow: ClaudeArtifactsWorkflow,
   onProgress?: (message: string) => void
 ): Promise<SetupWorkflowResult> {
   const phasesCompleted: string[] = [];
@@ -90,22 +109,26 @@ export async function runSetupWorkflow(
   };
 
   try {
+    // Validate target path before any operations
+    const validator = new InputValidator();
+    const validatedPath = validator.validatePath(targetPath);
+
     // Check for existing guidelines
-    if (hasExistingGuidelines(targetPath)) {
+    if (hasExistingGuidelines(validatedPath, validator)) {
       return createErrorResult(phasesCompleted, summary,
-        `Existing guidelines detected in ${targetPath}/.guidelines/\n\n` +
+        `Existing guidelines detected in ${validatedPath}/.guidelines/\n\n` +
         `The 'setup' command is for initial setup only.\n` +
         `To update existing guidelines, use:\n` +
-        `  npm run guidelines -- ${targetPath}\n` +
-        `  npm run indexes -- ${targetPath}\n` +
-        `  npm run claude -- ${targetPath}\n\n` +
+        `  npm run guidelines -- ${validatedPath}\n` +
+        `  npm run indexes -- ${validatedPath}\n` +
+        `  npm run claude -- ${validatedPath}\n\n` +
         `Or delete .guidelines/ and .claude/ folders to start fresh.`
       );
     }
 
     // Phase 1: Discovery
     const discoveryResult = await executePhase('Discovery', 1, 5,
-      () => runDiscoveryPhase(targetPath, depth),
+      () => runDiscoveryPhase(validatedPath, depth, providerManager, logger),
       onProgress
     );
 
@@ -122,7 +145,7 @@ export async function runSetupWorkflow(
 
     // Phase 2: Analysis
     const analysisResult = await executePhase('Pattern Analysis', 2, 5,
-      () => runAnalysisPhase(targetPath, techProfile, depth),
+      () => runAnalysisPhase(validatedPath, techProfile, depth),
       onProgress
     );
 
@@ -139,7 +162,7 @@ export async function runSetupWorkflow(
 
     // Phase 3: Guidelines Generation
     const guidelinesResult = await executePhase<GuidelinesWorkflowResult>('Guidelines Generation', 3, 5,
-      () => runGuidelinesWorkflow(client, targetPath, techProfile, patterns, false, onProgress),
+      () => runGuidelinesWorkflow(client, validatedPath, techProfile, patterns, false, onProgress, logger),
       onProgress
     );
 
@@ -148,16 +171,16 @@ export async function runSetupWorkflow(
     }
 
     phasesCompleted.push('guidelines');
-    summary.guidelinesGenerated = guidelinesResult.data?.guidelinesGenerated ?? 0;
+    summary.guidelinesGenerated = (guidelinesResult as unknown as GuidelinesWorkflowResult).guidelinesGenerated ?? 0;
 
     if (onProgress) {
       onProgress(`✓ Generated ${summary.guidelinesGenerated} guidelines`);
     }
 
     // Phase 4: Indexes Generation
-    const projectName = targetPath.split(/[/\\]/).pop() || 'Project';
+    const projectName = validatedPath.split(/[/\\]/).pop() || 'Project';
     const indexesResult = await executePhase<IndexesWorkflowResult>('Indexes Generation', 4, 5,
-      () => runIndexesWorkflow(client, targetPath, projectName, techProfile, false, onProgress),
+      () => runIndexesWorkflow(client, validatedPath, projectName, techProfile, false, onProgress),
       onProgress
     );
 
@@ -166,7 +189,7 @@ export async function runSetupWorkflow(
     }
 
     phasesCompleted.push('indexes');
-    summary.indexesGenerated = indexesResult.data?.indexesGenerated ?? 0;
+    summary.indexesGenerated = (indexesResult as unknown as IndexesWorkflowResult).indexesGenerated ?? 0;
 
     if (onProgress) {
       onProgress(`✓ Generated ${summary.indexesGenerated} indexes`);
@@ -174,7 +197,7 @@ export async function runSetupWorkflow(
 
     // Phase 5: Claude Artifacts
     const artifactsResult = await executePhase<ClaudeArtifactsWorkflowResult>('Claude Artifacts', 5, 5,
-      () => runClaudeArtifactsWorkflow(client, targetPath, techProfile, false, onProgress),
+      () => runClaudeArtifactsWorkflow(client, validatedPath, techProfile, workflow, false, onProgress),
       onProgress
     );
 
@@ -183,8 +206,9 @@ export async function runSetupWorkflow(
     }
 
     phasesCompleted.push('claude-artifacts');
-    summary.skillsGenerated = artifactsResult.data?.skillsGenerated ?? 0;
-    summary.agentsGenerated = artifactsResult.data?.agentsGenerated ?? 0;
+    const artifactsData = artifactsResult as unknown as ClaudeArtifactsWorkflowResult;
+    summary.skillsGenerated = artifactsData.skillsGenerated ?? 0;
+    summary.agentsGenerated = artifactsData.agentsGenerated ?? 0;
 
     if (onProgress) {
       onProgress(`✓ Generated ${summary.skillsGenerated} skills and ${summary.agentsGenerated} agents`);

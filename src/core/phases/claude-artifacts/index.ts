@@ -86,7 +86,7 @@ function writeArtifacts(
     fs.writeFileSync(filePath, agent.content, 'utf-8');
   }
 
-  // Generate and write CLAUDE.md
+  // Generate and write CLAUDE.md to root directory
   const packageScripts = getPackageJsonScripts(targetPath);
   const claudeMd = generateClaudeMd(projectName, guidelines, skills, agents, packageScripts);
   const claudeMdPath = path.join(targetPath, 'CLAUDE.md');
@@ -134,6 +134,7 @@ export async function runClaudeArtifactsPhase(
       client,
       rules,
       guidelines,
+      techProfile,
       maxAgents,
       (current, total, name) => {
         if (onProgress) {

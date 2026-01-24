@@ -5,11 +5,11 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { IProviderClient } from '@/providers/types';
+import type { ILogger } from '../../../interfaces/services/ILogger';
 import type { GeneratedGuideline, TechProfile } from '@/types';
 import { INDEX_SYSTEM_PROMPT, DOMAIN_INDEX_USER_PROMPT, ROOT_INDEX_USER_PROMPT } from './prompts';
 import { generateProjectTree } from '../../utils/file-io';
 import { PackageJsonSchema, parseWithSchema } from '@/types';
-import { logger } from '@/utils/logger';
 
 export interface GeneratedIndex {
   type: 'root' | 'domain';
@@ -74,15 +74,15 @@ export async function generateDomainIndex(
 /**
  * Read package.json to extract project info and commands
  */
-async function getProjectInfo(targetPath: string): Promise<{
+async function getProjectInfo(targetPath: string, logger?: ILogger): Promise<{
   description?: string;
   scripts?: Record<string, string>;
   hasReadme: boolean;
   projectTree: string;
 }> {
   try {
-    // Generate project tree structure
-    const projectTree = await generateProjectTree(targetPath, 3, 10);
+    // Generate project tree structure (directories only for cleaner overview)
+    const projectTree = await generateProjectTree(targetPath, 3, 10, true);
 
     const packageJsonPath = join(targetPath, 'package.json');
     if (existsSync(packageJsonPath)) {
@@ -98,7 +98,9 @@ async function getProjectInfo(targetPath: string): Promise<{
         };
       } else {
         // If parsing fails, return minimal info
-        logger.warn(`Failed to parse package.json at ${packageJsonPath}`, result.error);
+        if (logger) {
+          logger.warn(`Failed to parse package.json at ${packageJsonPath}`, result.error);
+        }
         return { hasReadme, projectTree };
       }
     }
@@ -124,7 +126,8 @@ export async function generateRootIndex(
   projectName: string,
   techProfile: TechProfile,
   guidelines: GeneratedGuideline[],
-  targetPath: string
+  targetPath: string,
+  logger?: ILogger
 ): Promise<GeneratedIndex> {
   // Group guidelines by domain
   const domainMap = new Map<string, number>();
@@ -148,7 +151,7 @@ export async function generateRootIndex(
   const criticalRules = extractCriticalRules(guidelines);
 
   // Get project info (description, scripts, README, project tree)
-  const projectInfo = await getProjectInfo(targetPath);
+  const projectInfo = await getProjectInfo(targetPath, logger);
 
   // Build guidelines map by domain
   const guidelinesByDomain = new Map<string, Array<{ type: string; fileName: string }>>();
@@ -190,6 +193,7 @@ export async function generateAllIndexes(
   techProfile: TechProfile,
   guidelines: GeneratedGuideline[],
   targetPath: string,
+  logger?: ILogger,
   onProgress?: (current: number, total: number, name: string) => void
 ): Promise<GeneratedIndex[]> {
   const indexes: GeneratedIndex[] = [];
@@ -217,7 +221,7 @@ export async function generateAllIndexes(
     onProgress(currentStep, totalSteps, 'root index');
   }
 
-  const rootIndex = await generateRootIndex(client, projectName, techProfile, guidelines, targetPath);
+  const rootIndex = await generateRootIndex(client, projectName, techProfile, guidelines, targetPath, logger);
   indexes.push(rootIndex);
 
   return indexes;

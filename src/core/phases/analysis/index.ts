@@ -1,5 +1,5 @@
 /**
- * Phase 2: Analysis  
+ * Phase 2: Analysis
  * Detect code patterns
  */
 
@@ -17,6 +17,66 @@ import {
 } from '@/utils/display';
 import { getFileLimits, IGNORE_PATTERNS } from '@/config';
 
+/**
+ * Analyze codebase patterns and conventions using AI-powered code analysis
+ *
+ * This phase samples representative files from the project and uses AI to detect
+ * coding patterns, naming conventions, architectural patterns, and other conventions
+ * that should be documented in guidelines. The analysis is intelligent and selective,
+ * focusing on the most relevant files based on project structure.
+ *
+ * The analysis process:
+ * 1. Intelligently selects representative files based on project type and structure
+ * 2. Reads and samples code from each project (in monorepo scenarios)
+ * 3. Uses AI to identify patterns: imports, naming, architecture, state management
+ * 4. Categorizes patterns by frequency (common, occasional, rare)
+ * 5. Returns comprehensive pattern report for guideline generation
+ *
+ * @param targetPath - Absolute path to the project root directory
+ * @param techProfile - Tech profile from discovery phase containing project structure
+ * @param depth - Analysis depth controlling sample size and AI model selection
+ *                'quick' - Samples fewer files, faster analysis
+ *                'standard' - Balanced sampling (recommended)
+ *                'thorough' - Comprehensive sampling, maximum pattern detection
+ * @param debug - If true, outputs detailed debug information about file sampling
+ *
+ * @returns Promise resolving to PhaseResult containing the PatternReport with
+ *          detected patterns categorized by type and frequency
+ *
+ * @throws {Error} If files cannot be read or AI analysis fails
+ *
+ * @example
+ * ```typescript
+ * // Analyze patterns after discovery
+ * const discoveryResult = await runDiscoveryPhase('/path/to/project', 'standard');
+ *
+ * if (discoveryResult.success && discoveryResult.data) {
+ *   const analysisResult = await runAnalysisPhase(
+ *     '/path/to/project',
+ *     discoveryResult.data,
+ *     'standard',
+ *     false  // no debug output
+ *   );
+ *
+ *   if (analysisResult.success && analysisResult.data) {
+ *     console.log('Import patterns:', analysisResult.data.importPatterns);
+ *     console.log('Naming conventions:', analysisResult.data.namingConventions);
+ *     console.log('Architecture patterns:', analysisResult.data.architecturePatterns);
+ *   }
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Thorough analysis with debug output
+ * const result = await runAnalysisPhase(
+ *   process.cwd(),
+ *   techProfile,
+ *   'thorough',
+ *   true  // enable debug to see file sampling details
+ * );
+ * ```
+ */
 export async function runAnalysisPhase(
   targetPath: string,
   techProfile: TechProfile,
@@ -38,7 +98,7 @@ export async function runAnalysisPhase(
       spinner.text = `Sampling files from ${project.name}...`;
 
       // Get file patterns based on project type
-      const patterns = getFilePatterns(project.type);
+      const patterns = getFilePatterns(project.type, techProfile.stack.testingFrameworks);
       
       for (const pattern of patterns) {
         const files = await glob(pattern, {
@@ -81,6 +141,7 @@ export async function runAnalysisPhase(
       'Import Patterns': patternReport.importPatterns?.length || 0,
       'Naming Conventions': patternReport.namingConventions?.length || 0,
       'Architecture Patterns': patternReport.architecturePatterns?.length || 0,
+      'Testing Patterns': patternReport.testingPatterns?.length || 0,
     });
 
     return {
@@ -99,19 +160,43 @@ export async function runAnalysisPhase(
   }
 }
 
-function getFilePatterns(projectType: string): string[] {
+function getFilePatterns(projectType: string, testingFrameworks?: string[]): string[] {
   const basePatterns = ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx'];
-  
+
+  let patterns: string[];
   switch (projectType) {
     case 'backend':
-      return ['**/*.ts', '**/routes/**/*.ts', '**/services/**/*.ts', '**/repositories/**/*.ts'];
+      patterns = ['**/*.ts', '**/routes/**/*.ts', '**/services/**/*.ts', '**/repositories/**/*.ts'];
+      break;
     case 'frontend':
-      return ['**/*.tsx', '**/components/**/*.tsx', '**/screens/**/*.tsx', '**/hooks/**/*.ts'];
+      patterns = ['**/*.tsx', '**/components/**/*.tsx', '**/screens/**/*.tsx', '**/hooks/**/*.ts'];
+      break;
     case 'mobile':
-      return ['**/*.tsx', '**/components/**/*.tsx', '**/screens/**/*.tsx'];
+      patterns = ['**/*.tsx', '**/components/**/*.tsx', '**/screens/**/*.tsx'];
+      break;
     default:
-      return basePatterns;
+      patterns = basePatterns;
   }
+
+  // Add test file patterns if testing frameworks are detected
+  if (testingFrameworks && testingFrameworks.length > 0) {
+    patterns.push(
+      '**/*.test.ts',
+      '**/*.test.tsx',
+      '**/*.test.js',
+      '**/*.test.jsx',
+      '**/*.spec.ts',
+      '**/*.spec.tsx',
+      '**/*.spec.js',
+      '**/*.spec.jsx',
+      '**/tests/**/*.ts',
+      '**/tests/**/*.tsx',
+      '**/__tests__/**/*.ts',
+      '**/__tests__/**/*.tsx'
+    );
+  }
+
+  return patterns;
 }
 
 export { runAnalysisPhase as default };

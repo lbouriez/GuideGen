@@ -63,11 +63,27 @@ async function scanDirectory(
         await scanDirectory(rootPath, fullPath, directories, keyFiles, configFiles, depth + 1);
       } else if (entry.isFile()) {
         // Check if it's a config file
-        if (CONFIG_FILE_PATTERNS.some(pattern => relativePath.includes(pattern))) {
+        // Strip glob patterns (e.g., "**/package.json" -> "package.json")
+        if (CONFIG_FILE_PATTERNS.some(pattern => {
+          const cleanPattern = pattern.replace(/^\*\*\//, '').replace(/^\*/, '');
+          return relativePath.includes(cleanPattern) || entry.name === cleanPattern || entry.name.includes(cleanPattern);
+        })) {
           configFiles.push(relativePath);
         }
         // Check if it's a key file
         if (KEY_FILE_PATTERNS.some(pattern => entry.name === pattern)) {
+          keyFiles.push(relativePath);
+        }
+        // Always include DI (dependency injection) files as key files
+        // Use path separators that work on both Windows and Unix
+        const normalizedPath = relativePath.replace(/\\/g, '/');
+        if (normalizedPath.includes('di/') && (entry.name.endsWith('.ts') || entry.name.endsWith('.js'))) {
+          keyFiles.push(relativePath);
+        }
+        // Include service files with likely DI decorators
+        if ((normalizedPath.includes('services/') || normalizedPath.includes('workflows/')) &&
+            !entry.name.includes('index') &&
+            (entry.name.endsWith('.ts') || entry.name.endsWith('.js'))) {
           keyFiles.push(relativePath);
         }
       }

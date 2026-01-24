@@ -1,6 +1,9 @@
 /**
- * Test setup for Claude Bootstrap integration tests
+ * Test setup for GuideGen integration tests
  */
+
+// Must be imported first for DI decorators to work
+import 'reflect-metadata';
 
 import { beforeAll, vi } from 'vitest';
 import { createFsFromVolume, Volume } from 'memfs';

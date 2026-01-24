@@ -4,8 +4,31 @@
  * GuideGen CLI - AI-Powered Guideline Generator
  */
 
+// Must be imported first for DI decorators to work
+import 'reflect-metadata';
+
 import { Command } from 'commander';
-import { resolve } from 'path';
+import { resolve, join } from 'path';
+import { existsSync, statSync, readFileSync } from 'fs';
+
+// Load .env file into process.env at startup for non-interactive usage
+const envPath = join(process.cwd(), '.env');
+if (existsSync(envPath)) {
+  const envContent = readFileSync(envPath, 'utf-8');
+  const lines = envContent.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const [key, ...valueParts] = trimmed.split('=');
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join('=').trim();
+      // Only set if not already in environment (environment variables take precedence)
+      if (!process.env[key.trim()]) {
+        process.env[key.trim()] = value;
+      }
+    }
+  }
+}
 import type { AnalysisDepth } from './types';
 import {
   runSetupWorkflow,
@@ -14,7 +37,7 @@ import {
   runClaudeGeneration,
   runDiscoveryPhase,
   runAnalysisPhase,
-} from './core/workflows';
+} from './core/workflows/index.js';
 import {
   printHeader,
   printPhase,
@@ -22,12 +45,70 @@ import {
   printSuccess,
   printInfo,
   printDivider,
-} from './utils/display';
-import { ProviderManager } from './providers/manager';
-import { generateAnalysisReport } from './core/phases/analysis-report';
-import { getErrorMessage } from './core/utils/errors';
+} from './utils/display.js';
+import { ProviderManager } from './providers/manager.js';
+import { container } from './di/container.js';
+import { TYPES } from './di/identifiers.js';
+import type { ILogger } from './interfaces/services/ILogger.js';
+import type { ClaudeArtifactsWorkflow } from './workflows/claude-artifacts/ClaudeArtifactsWorkflow.js';
+import { generateAnalysisReport } from './core/phases/analysis-report.js';
+import { getErrorMessage } from './core/utils/errors.js';
+import { TargetPathSchema, AnalysisDepthSchema } from './validation/schemas.js';
+import { ValidationError } from './errors/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
+
+/**
+ * Validate and resolve target path
+ */
+function validateTargetPath(inputPath: string): string {
+  const resolvedPath = resolve(inputPath);
+
+  // Validate path format
+  const parseResult = TargetPathSchema.safeParse(inputPath);
+  if (!parseResult.success) {
+    throw new ValidationError(
+      `Invalid path: ${parseResult.error.issues.map(i => i.message).join(', ')}`,
+      { path: inputPath },
+      'path'
+    );
+  }
+
+  // Check if path exists and is a directory
+  if (!existsSync(resolvedPath)) {
+    throw new ValidationError(
+      `Path does not exist: ${resolvedPath}`,
+      { path: resolvedPath },
+      'path'
+    );
+  }
+
+  const stats = statSync(resolvedPath);
+  if (!stats.isDirectory()) {
+    throw new ValidationError(
+      `Path is not a directory: ${resolvedPath}`,
+      { path: resolvedPath },
+      'path'
+    );
+  }
+
+  return resolvedPath;
+}
+
+/**
+ * Validate analysis depth
+ */
+function validateDepth(depth: string): AnalysisDepth {
+  const parseResult = AnalysisDepthSchema.safeParse(depth);
+  if (!parseResult.success) {
+    throw new ValidationError(
+      `Invalid depth: ${depth}. Must be one of: quick, standard, thorough`,
+      { depth },
+      'depth'
+    );
+  }
+  return parseResult.data;
+}
 
 const program = new Command();
 
@@ -39,34 +120,62 @@ program
 program
   .command('setup')
   .description('Full setup - analyze codebase and generate all artifacts')
-  .argument('[path]', 'Path to the project to analyze', '../')
+  .argument('[path]', 'Path to the project to analyze', '.')
   .option('-d, --depth <depth>', 'Analysis depth: quick, standard, thorough', 'standard')
   .option('--force-setup', 'Force re-run the AI provider setup')
-  .action(async (path: string, options: { depth: string; forceSetup: boolean }) => {
-    await runSetup(path, options.depth as AnalysisDepth, options.forceSetup);
+  .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
+    try {
+      const validatedPath = validateTargetPath(inputPath);
+      const validatedDepth = validateDepth(options.depth);
+      await runSetup(validatedPath, validatedDepth, options.forceSetup);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
+      throw error;
+    }
   });
 
 program
   .command('analyze')
   .description('Analysis only - detect patterns without generating files')
-  .argument('[path]', 'Path to the project to analyze', '../')
+  .argument('[path]', 'Path to the project to analyze', '.')
   .option('-d, --depth <depth>', 'Analysis depth: quick, standard, thorough', 'standard')
   .option('--force-setup', 'Force re-run the AI provider setup')
-  .action(async (path: string, options: { depth: string; forceSetup: boolean }) => {
-    await runAnalyze(path, options.depth as AnalysisDepth, options.forceSetup);
+  .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
+    try {
+      const validatedPath = validateTargetPath(inputPath);
+      const validatedDepth = validateDepth(options.depth);
+      await runAnalyze(validatedPath, validatedDepth, options.forceSetup);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
+      throw error;
+    }
   });
 
 program
   .command('guidelines')
   .description('Generate guidelines only')
-  .argument('[path]', 'Path to the project', '../')
+  .argument('[path]', 'Path to the project', '.')
   .option('-d, --depth <depth>', 'Analysis depth', 'standard')
   .option('--force-setup', 'Force re-run setup')
-  .action(async (path: string, options: { depth: string; forceSetup: boolean }) => {
+  .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
     try {
-      await runGuidelinesGeneration(path, options.depth as AnalysisDepth, false, false, options.forceSetup, false);
+      const validatedPath = validateTargetPath(inputPath);
+      const validatedDepth = validateDepth(options.depth);
+      const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
+      const logger = container.get<ILogger>(TYPES.ILogger);
+      await runGuidelinesGeneration(validatedPath, validatedDepth, false, false, providerManager, logger, options.forceSetup, false);
       printSuccess('✓ Guidelines generation complete!');
     } catch (error: unknown) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
       printError(`Guidelines generation failed: ${getErrorMessage(error)}`);
       process.exit(1);
     }
@@ -75,13 +184,20 @@ program
 program
   .command('indexes')
   .description('Generate/update index files')
-  .argument('[path]', 'Path to the project', '../')
+  .argument('[path]', 'Path to the project', '.')
   .option('--force-setup', 'Force re-run setup')
-  .action(async (path: string, options: { forceSetup: boolean }) => {
+  .action(async (inputPath: string, options: { forceSetup: boolean }) => {
     try {
-      await runIndexGeneration(path, false, false, options.forceSetup, false);
+      const validatedPath = validateTargetPath(inputPath);
+      const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
+      const logger = container.get<ILogger>(TYPES.ILogger);
+      await runIndexGeneration(validatedPath, false, false, providerManager, logger, options.forceSetup, false);
       printSuccess('✓ Index generation complete!');
     } catch (error: unknown) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
       printError(`Index generation failed: ${getErrorMessage(error)}`);
       process.exit(1);
     }
@@ -90,26 +206,34 @@ program
 program
   .command('claude')
   .description('Generate Claude skills and agents')
-  .argument('[path]', 'Path to the project', '../')
+  .argument('[path]', 'Path to the project', '.')
   .option('-d, --depth <depth>', 'Analysis depth', 'standard')
   .option('--force-setup', 'Force re-run setup')
-  .action(async (path: string, options: { depth: string; forceSetup: boolean }) => {
+  .action(async (inputPath: string, options: { depth: string; forceSetup: boolean }) => {
     try {
-      await runClaudeGeneration(path, options.depth as AnalysisDepth, false, false, options.forceSetup, false);
+      const validatedPath = validateTargetPath(inputPath);
+      const validatedDepth = validateDepth(options.depth);
+      const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
+      const logger = container.get<ILogger>(TYPES.ILogger);
+      const workflow = container.get<ClaudeArtifactsWorkflow>(TYPES.IClaudeWorkflow);
+      await runClaudeGeneration(validatedPath, validatedDepth, false, false, providerManager, logger, workflow, options.forceSetup, false);
       printSuccess('✓ Claude artifacts generation complete!');
     } catch (error: unknown) {
+      if (error instanceof ValidationError) {
+        printError(`Validation error: ${error.message}`);
+        process.exit(1);
+      }
       printError(`Claude artifacts generation failed: ${getErrorMessage(error)}`);
       process.exit(1);
     }
   });
 
 async function runSetup(
-  targetPath: string,
+  resolvedPath: string,
   depth: AnalysisDepth,
   forceSetup: boolean = false
 ): Promise<void> {
   printHeader();
-  const resolvedPath = resolve(targetPath);
   printInfo(`Target: ${resolvedPath}`);
   printInfo(`Depth: ${depth}`);
   printDivider();
@@ -117,7 +241,7 @@ async function runSetup(
   try {
     // Initialize provider
     printInfo('Initializing AI provider...');
-    const providerManager = ProviderManager.getInstance();
+    const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
 
     if (forceSetup) {
       await providerManager.forceSetup();
@@ -127,11 +251,18 @@ async function runSetup(
     printSuccess('AI provider ready');
     printDivider();
 
+    // Get dependencies from container
+    const logger = container.get<ILogger>(TYPES.ILogger);
+    const workflow = container.get<ClaudeArtifactsWorkflow>(TYPES.IClaudeWorkflow);
+
     // Run full setup workflow
     const result = await runSetupWorkflow(
       client,
       resolvedPath,
       depth,
+      providerManager,
+      logger,
+      workflow,
       (msg) => printInfo(msg)
     );
 
@@ -155,26 +286,28 @@ async function runSetup(
 }
 
 async function runAnalyze(
-  targetPath: string,
+  resolvedPath: string,
   depth: AnalysisDepth,
   forceSetup: boolean = false
 ): Promise<void> {
   printHeader();
-  const resolvedPath = resolve(targetPath);
   printInfo(`Target: ${resolvedPath}`);
   printInfo(`Depth: ${depth}`);
   printDivider();
 
   try {
     // Initialize provider
-    const providerManager = ProviderManager.getInstance();
+    const providerManager = container.get<ProviderManager>(TYPES.IProviderManager);
     if (forceSetup) {
       await providerManager.forceSetup();
     }
 
+    // Get dependencies from container
+    const logger = container.get<ILogger>(TYPES.ILogger);
+
     // Phase 1: Discovery
     printPhase(1, 'Discovery');
-    const discoveryResult = await runDiscoveryPhase(resolvedPath, depth);
+    const discoveryResult = await runDiscoveryPhase(resolvedPath, depth, providerManager, logger);
 
     if (!discoveryResult.success) {
       printError(`Discovery failed: ${discoveryResult.error}`);
@@ -186,7 +319,7 @@ async function runAnalyze(
 
     // Phase 2: Analysis
     printPhase(2, 'Pattern Analysis');
-    const analysisResult = await runAnalysisPhase(resolvedPath, discoveryResult.data, depth);
+    const analysisResult = await runAnalysisPhase(resolvedPath, discoveryResult.data, depth, false);
 
     if (!analysisResult.success) {
       printError(`Analysis failed: ${analysisResult.error}`);
@@ -224,5 +357,16 @@ async function runAnalyze(
     process.exit(1);
   }
 }
+
+// Add global error handlers
+process.on('uncaughtException', (error) => {
+  printError(`Fatal error: ${getErrorMessage(error)}`);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  printError(`Fatal error: ${getErrorMessage(reason)}`);
+  process.exit(1);
+});
 
 program.parse();

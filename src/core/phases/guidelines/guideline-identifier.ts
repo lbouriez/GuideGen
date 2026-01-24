@@ -4,9 +4,9 @@
  */
 
 import type { IProviderClient } from '@/providers/types';
+import type { ILogger } from '../../../interfaces/services/ILogger';
 import type { PatternReport, FolderStructure, GuidelineDomain } from '@/types';
 import { toGuidelineDomain } from '@/types';
-import { logger } from '@/utils/logger';
 
 export interface GuidelineToGenerate {
   domain: GuidelineDomain;
@@ -15,44 +15,104 @@ export interface GuidelineToGenerate {
   description?: string;
 }
 
-const IDENTIFICATION_SYSTEM_PROMPT = `You are a code documentation expert analyzing a codebase to identify which specific guidelines should be created.
+/**
+ * Get recommended guideline count based on project size and complexity
+ */
+function getRecommendedGuidelineCount(
+  techStack: string[],
+  fileCount: number
+): { min: number; max: number; target: string } {
+  // Small projects (< 50 files)
+  if (fileCount < 50) {
+    return { min: 3, max: 6, target: '3-6' };
+  }
 
-Your task: Analyze the project structure, detected patterns, and tech stack to determine which SPECIFIC guideline topics are most relevant.
+  // Medium projects (50-200 files)
+  if (fileCount < 200) {
+    return { min: 5, max: 10, target: '5-10' };
+  }
 
-CRITICAL RULES:
-1. Suggest SPECIFIC topics based on what you actually see in the codebase
-2. DO NOT use generic topics like "architecture" or "error-handling"
-3. Focus on CONCRETE patterns: "dependency-injection", "cli-commands", "provider-pattern", etc.
-4. Suggest 5-12 guidelines depending on project complexity
-5. Each guideline should document a specific, observable pattern
+  // Large projects (200+ files) or multi-framework
+  if (fileCount >= 200 || techStack.length > 5) {
+    return { min: 8, max: 15, target: '8-15' };
+  }
 
-DOMAIN ASSIGNMENT RULES (VERY IMPORTANT - BE CONSISTENT):
-- Testing frameworks/patterns → domain: "testing" (vitest, jest, mocha, test patterns)
-- Backend API/architecture patterns → domain: "backend" (routes, services, DI, providers, phases)
-- Frontend UI/component patterns → domain: "frontend" (components, hooks, state, styling)
-- Build/tooling → domain: "tooling" (webpack, vite, typescript config)
-- Shared/common → domain: "shared" (ONLY if monorepo with multiple projects)
+  // Default
+  return { min: 5, max: 10, target: '5-10' };
+}
 
-Example GOOD suggestions with correct domains:
-- { domain: "testing", type: "vitest-testing", priority: 1 } (if you see vitest config)
-- { domain: "backend", type: "dependency-injection", priority: 1 } (if @injectable decorators)
-- { domain: "backend", type: "cli-commands", priority: 1 } (if commander.js)
-- { domain: "backend", type: "provider-pattern", priority: 1 } (if provider pattern)
-- { domain: "backend", type: "phase-architecture", priority: 1 } (if phase-based structure)
-- { domain: "tooling", type: "typescript-config", priority: 2 } (if complex tsconfig)
+const IDENTIFICATION_SYSTEM_PROMPT = `You are a code documentation expert and software architect analyzing a codebase to identify which specific technical patterns should be documented.
 
-Example BAD suggestions:
-- "architecture" (too generic)
-- "error-handling" (too generic)
-- { domain: "backend", type: "vitest-testing" } (WRONG - testing should be in "testing" domain)`;
+Your task: Based on the detected frameworks and project structure, identify the MOST IMPORTANT technical patterns that have clear implementation code to document.
+
+IMPORTANT: The number of guidelines should match the project's complexity. Don't force a specific count.
+
+CORE PRINCIPLES:
+1. **Document implementations, not concepts** - Only suggest patterns where actual code exists
+2. **Framework-specific patterns** - Adapt suggestions based on detected tech stack
+3. **Observable patterns only** - Must be visible in file paths/structure/patterns
+4. **Avoid generic advice** - No "best practices" that apply to every project
+5. **Avoid contradictions** - If a codebase uses BOTH path aliases AND relative imports, create ONE guideline documenting both, not two contradicting guidelines
+6. **Skip trivial naming conventions** - Do NOT create separate guidelines for "camelCase" or "PascalCase" unless there's a specific project convention (e.g., "Service suffix for all service classes")
+
+GUIDELINE SELECTION STRATEGY:
+
+For each detected framework, identify its characteristic patterns:
+
+**Backend Frameworks:**
+- Express: middleware patterns, route organization, error handling middleware
+- NestJS: decorators (@Injectable, @Controller), module system, guards/interceptors
+- Fastify: plugin system, hooks, schema validation
+
+**Frontend Frameworks:**
+- React: component patterns, hooks usage, context/state management
+- Vue: composition API, Pinia stores, directives
+- Angular: services, dependency injection, modules, RxJS patterns
+
+**Build Tools:**
+- TypeScript: path aliases, strict mode configuration, type patterns
+- Webpack/Vite: custom plugins, environment configs
+
+**Testing:**
+- Vitest/Jest: test organization, mocking patterns, fixture usage
+- Playwright: page object models, test structure
+
+**Other Patterns:**
+- GraphQL: schema patterns, resolver organization
+- Database: ORM patterns, migration structure, query builders
+- Authentication: strategy patterns, middleware usage
+
+DOMAIN ASSIGNMENT:
+- "backend" → Server-side patterns (routes, services, DB, API)
+- "frontend" → UI patterns (components, state, rendering)
+- "testing" → Test patterns (any test framework)
+- "all" → Applies everywhere (TypeScript config, build tools)
+
+OUTPUT FORMAT:
+Return specific, technical pattern names like:
+- "express-middleware" (not "middleware")
+- "inversify-di" (not "dependency-injection")
+- "zod-validation" (not "validation")
+- "react-hooks" (not "hooks")
+- "typescript-imports" or "module-imports" (not separate "path-aliases" AND "relative-imports" - combine them!)
+
+SPECIAL RULES FOR COMMON PATTERNS:
+- **Imports**: If codebase uses both path aliases and relative imports, create ONE "typescript-imports" or "module-imports" guideline documenting both styles
+- **Naming**: Only create naming guidelines if there's a SPECIFIC convention (e.g., "service-naming" for "XxxService" suffix pattern), NOT generic camelCase/PascalCase
+- **File organization**: Only if there's a specific pattern (e.g., "feature-folders" for specific folder structure), NOT generic "organize your files"
+
+Be specific about the framework/library in the guideline name.`;
 
 function IDENTIFICATION_USER_PROMPT(
   projectType: string,
   techStack: string,
   patterns: string,
-  projectStructure: string
+  projectStructure: string,
+  guidelineCountTarget: string
 ): string {
-  return `Analyze this ${projectType} codebase and identify which SPECIFIC guideline topics to document.
+  return `Analyze this ${projectType} codebase and identify ${guidelineCountTarget} specific technical patterns to document.
+
+**IMPORTANT**: Aim for ${guidelineCountTarget} guidelines, but quality > quantity. If the project only has 4 clear patterns, return 4. If it has 12, return 12. The range is a guide, not a requirement.
 
 ## Tech Stack
 ${techStack}
@@ -63,42 +123,51 @@ ${patterns}
 ## Project Structure (sample)
 ${projectStructure}
 
-## Instructions
+## Your Task
 
-Based on what you see above, suggest 5-12 SPECIFIC guideline topics that would be most valuable to document.
+Based on the tech stack and patterns above, identify which framework-specific patterns should be documented.
 
-Focus on:
-1. Architectural patterns you can identify (DI, phases, providers, layers)
-2. Key technical implementations (CLI, testing framework, prompts, file handling)
-3. Project-specific workflows (setup, generation, validation)
-4. Important conventions (naming, organization, error handling)
+For each framework/library detected:
+1. Identify its characteristic implementation patterns
+2. Look for evidence in file paths and detected patterns
+3. Suggest specific guideline names (include framework name)
+4. Assign appropriate domain (backend/frontend/testing/all)
 
-CRITICAL: Assign correct domains using these rules:
-- Testing (vitest, jest, test patterns) → "testing" domain
-- Backend patterns (API, DI, phases) → "backend" domain
-- Frontend patterns (components, hooks) → "frontend" domain
-- Build/tooling (tsconfig, webpack) → "tooling" domain
+**Example thought process:**
+- See "inversify" in tech stack → Look for DI container files → Suggest "inversify-di"
+- See "express" in frameworks → Look for middleware → Suggest "express-middleware"
+- See "zod" in dependencies → Look for schema files → Suggest "zod-validation"
+- See "react" in frameworks → Look for hooks → Suggest "react-hooks"
+- See "vitest" in test tools → Look for test patterns → Suggest "vitest-testing"
+- See both path aliases and relative imports → Suggest ONE "typescript-imports" guideline (not two separate ones)
+- See "Service" suffix pattern → Suggest "service-naming" (specific convention, not generic camelCase)
 
-Return ONLY a JSON object:
+**Domain rules:**
+- Backend server patterns → "backend"
+- UI/component patterns → "frontend"
+- Test patterns → "testing"
+- Build/config (applies to all) → "all"
+
+Return JSON:
 {
   "guidelines": [
     {
       "domain": "backend",
-      "type": "dependency-injection",
+      "type": "framework-specific-pattern-name",
       "priority": 1,
-      "description": "InversifyJS DI pattern with @injectable decorators"
-    },
-    {
-      "domain": "testing",
-      "type": "vitest-testing",
-      "priority": 1,
-      "description": "Vitest testing framework and patterns"
+      "description": "Brief technical description"
     }
   ]
 }
 
-Suggest guidelines that reflect the ACTUAL codebase, not generic templates.
-Remember: vitest/jest/testing → "testing" domain, NOT "backend"`;
+Focus on patterns where actual implementation code exists.
+Name guidelines specifically (e.g., "express-routes", not "routing").
+
+CRITICAL - DO NOT CREATE THESE GENERIC GUIDELINES:
+- ❌ "camelCase-naming" or "PascalCase-naming" (too generic)
+- ❌ "path-aliases" AND "relative-imports" separately (combine into one "typescript-imports")
+- ❌ "file-organization" or "folder-structure" (unless there's a specific pattern like "feature-folders")
+- ❌ "layer-separation" (too abstract unless there's a specific layering framework)`;
 }
 
 /**
@@ -107,23 +176,45 @@ Remember: vitest/jest/testing → "testing" domain, NOT "backend"`;
 export async function identifyGuidelinesWithAI(
   client: IProviderClient,
   patterns: PatternReport,
-  techProfile: { projects?: Array<{ type: string }>; stack: { languages: string[]; frameworks: string[]; buildTools: string[] } },
-  projectStructure: FolderStructure
+  techProfile: { projects?: Array<{ type: string }>; stack: { languages: string[]; frameworks: string[]; buildTools: string[]; testingFrameworks?: string[] } },
+  projectStructure: FolderStructure,
+  logger?: ILogger
 ): Promise<GuidelineToGenerate[]> {
+  // Create a no-op logger if none provided
+  const safeLogger = logger || {
+    warn: () => {},
+    info: () => {},
+    error: () => {},
+    debug: () => {},
+    log: () => {}
+  };
+
   try {
     // Prepare inputs
     const projectType = techProfile.projects?.[0]?.type || 'unknown';
-    const techStack = [
+    const techStackArray = [
       ...techProfile.stack.languages,
       ...techProfile.stack.frameworks,
-      ...techProfile.stack.buildTools
-    ].join(', ');
+      ...techProfile.stack.buildTools,
+      ...(techProfile.stack.testingFrameworks || [])
+    ];
+    const techStack = techStackArray.join(', ');
+
+    // Calculate recommended guideline count based on project size
+    const fileCount = projectStructure.keyFiles.length + (projectStructure.configFiles?.length || 0);
+    const countRecommendation = getRecommendedGuidelineCount(techStackArray, fileCount);
+
+    safeLogger.debug(`Project has ${fileCount} files, recommending ${countRecommendation.target} guidelines`);
 
     // Format patterns summary
     const patternsSummary = [
       patterns.importPatterns?.map(p => `- Import: ${p.name}`).join('\n'),
       patterns.namingConventions?.map(p => `- Naming: ${p.name}`).join('\n'),
       patterns.architecturePatterns?.map(p => `- Architecture: ${p.name}`).join('\n'),
+      patterns.testingPatterns?.map(p => `- Testing: ${p.name}`).join('\n'),
+      patterns.errorHandling?.map(p => `- Error Handling: ${p.name}`).join('\n'),
+      patterns.loggingPatterns?.map(p => `- Logging: ${p.name}`).join('\n'),
+      patterns.stateManagement?.map(p => `- State Management: ${p.name}`).join('\n'),
     ].filter(Boolean).join('\n') || '(No patterns detected)';
 
     // Format project structure (sample)
@@ -145,7 +236,7 @@ export async function identifyGuidelinesWithAI(
       }>;
     }>(
       IDENTIFICATION_SYSTEM_PROMPT,
-      IDENTIFICATION_USER_PROMPT(projectType, techStack, patternsSummary, structureSummary)
+      IDENTIFICATION_USER_PROMPT(projectType, techStack, patternsSummary, structureSummary, countRecommendation.target)
     );
 
     const guidelines = (response.guidelines || []).map(g => ({
@@ -154,15 +245,15 @@ export async function identifyGuidelinesWithAI(
     }));
 
     if (guidelines.length === 0) {
-      logger.warn('AI returned no guidelines, using fallback');
+      safeLogger.warn('AI returned no guidelines, using fallback');
       return getFallbackGuidelines(projectType);
     }
 
-    logger.info(`AI identified ${guidelines.length} guidelines: ${guidelines.map(g => g.type).join(', ')}`);
+    safeLogger.info(`AI identified ${guidelines.length} guidelines: ${guidelines.map(g => g.type).join(', ')}`);
 
     return guidelines;
   } catch (error) {
-    logger.error('Guideline identification failed, using fallback', error);
+    safeLogger.error('Guideline identification failed, using fallback', error);
     const projectType = techProfile.projects?.[0]?.type || 'unknown';
     return getFallbackGuidelines(projectType);
   }

@@ -3,6 +3,7 @@
  */
 
 import type { IProviderClient } from '@/providers/types';
+import type { ILogger } from '../../../interfaces/services/ILogger';
 import type { PatternReport, GeneratedGuideline, FolderStructure, TechProfile } from '@/types';
 import { GUIDELINE_SYSTEM_PROMPT, GUIDELINE_USER_PROMPT } from './prompts';
 import { selectAndReadFiles } from './file-selector';
@@ -13,6 +14,37 @@ export type { GuidelineToGenerate };
 // Old hardcoded identification removed - now using AI-driven identification
 
 /**
+ * Determine optimal number of files to read based on guideline type and tech stack
+ */
+function determineMaxFiles(guideline: GuidelineToGenerate, techProfile: TechProfile): number {
+  const guidelineType = guideline.type.toLowerCase();
+
+  // Testing guidelines need more context to show proper test patterns
+  if (guidelineType.includes('test') || guidelineType.includes('testing')) {
+    // If testing frameworks detected, be even more generous
+    if (techProfile.stack.testingFrameworks && techProfile.stack.testingFrameworks.length > 0) {
+      return 20; // 2x context for testing with frameworks
+    }
+    return 15; // 1.5x context for testing without frameworks
+  }
+
+  // Mocking strategies also benefit from more test examples
+  if (guidelineType.includes('mock')) {
+    return 15;
+  }
+
+  // Architecture, patterns, organization guidelines benefit from more variety
+  if (guidelineType.includes('architecture') ||
+      guidelineType.includes('organization') ||
+      guidelineType.includes('pattern')) {
+    return 12;
+  }
+
+  // Default for most guidelines
+  return 10;
+}
+
+/**
  * Generate a single guideline using AI
  */
 export async function generateGuideline(
@@ -20,8 +52,12 @@ export async function generateGuideline(
   guideline: GuidelineToGenerate,
   patterns: PatternReport,
   targetPath: string,
-  projectStructure: FolderStructure
+  projectStructure: FolderStructure,
+  techProfile: TechProfile
 ): Promise<GeneratedGuideline> {
+  // Determine optimal number of files based on guideline type and tech stack
+  const maxFiles = determineMaxFiles(guideline, techProfile);
+
   // Let AI select and read relevant files for this guideline
   const codeExamples = await selectAndReadFiles(
     client,
@@ -29,16 +65,16 @@ export async function generateGuideline(
     projectStructure,
     guideline.type,
     guideline.domain,
-    10 // Max 10 files per guideline
+    maxFiles
   );
 
   // Extract relevant patterns
   const relevantPatterns = extractRelevantPatterns(patterns, guideline);
 
-  // Generate guideline content with REAL code examples
+  // Generate guideline content with REAL code examples and tech stack validation
   const response = await client.sendMessage(
     GUIDELINE_SYSTEM_PROMPT,
-    GUIDELINE_USER_PROMPT(guideline.domain, guideline.type, relevantPatterns, codeExamples)
+    GUIDELINE_USER_PROMPT(guideline.domain, guideline.type, relevantPatterns, codeExamples, techProfile)
   );
 
   return {
@@ -211,6 +247,7 @@ export async function generateAllGuidelines(
   targetPath: string,
   projectStructure: FolderStructure,
   techProfile: TechProfile,
+  logger?: ILogger,
   onProgress?: (current: number, total: number, guideline: string) => void
 ): Promise<GeneratedGuideline[]> {
   // Use AI to identify which guidelines to create based on actual codebase
@@ -222,7 +259,8 @@ export async function generateAllGuidelines(
     client,
     patterns,
     techProfile,
-    projectStructure
+    projectStructure,
+    logger
   );
 
   const results: GeneratedGuideline[] = [];
@@ -238,7 +276,8 @@ export async function generateAllGuidelines(
       guideline,
       patterns,
       targetPath,
-      projectStructure
+      projectStructure,
+      techProfile
     );
     results.push(generated);
   }

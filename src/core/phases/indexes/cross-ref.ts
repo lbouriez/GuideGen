@@ -59,6 +59,11 @@ export function validateIndexLinks(
       continue;
     }
 
+    // Skip index file links (they're generated together, so they may not exist on disk yet)
+    if (link.url.includes('index.md') || link.url.includes('-index.md')) {
+      continue;
+    }
+
     // Check if link points to a valid guideline
     if (!validPaths.has(link.url)) {
       // Try resolving the path
